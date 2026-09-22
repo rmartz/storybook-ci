@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
-import { extname, join } from 'node:path';
+import { extname, resolve } from 'node:path';
 
 import { chromium } from 'playwright';
 
+import { resolveStaticPath } from './lib/static-path.js';
 import type { StoryIndexEntry } from './types.js';
 
 const MIME_TYPES: Record<string, string> = {
@@ -106,10 +107,17 @@ export async function captureStories(
 }
 
 function startStaticServer(staticDir: string, port: number): Promise<Server> {
-  return new Promise((resolve) => {
+  const staticRoot = resolve(staticDir);
+  return new Promise((resolveServer) => {
     const server = createServer((req, res) => {
       const urlPath = (req.url ?? '/').split('?')[0] ?? '/';
-      const filePath = join(staticDir, urlPath === '/' ? 'index.html' : urlPath.replace(/^\//, ''));
+      // Reject any request that would escape the served Storybook build (CWE-22).
+      const filePath = resolveStaticPath(staticRoot, urlPath);
+      if (filePath === null) {
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+      }
       const mime = MIME_TYPES[extname(filePath)] ?? 'application/octet-stream';
       try {
         const content = readFileSync(filePath);
@@ -120,7 +128,7 @@ function startStaticServer(staticDir: string, port: number): Promise<Server> {
         res.end('Not found');
       }
     });
-    server.listen(port, () => resolve(server));
+    server.listen(port, () => resolveServer(server));
   });
 }
 
