@@ -43,6 +43,7 @@ on:
     branches: [main]
     paths: ['src/**/*.stories.tsx', 'src/**/*.stories.ts', 'src/**', '.storybook/**']
 permissions:
+  contents: read
   pull-requests: write
 jobs:
   screenshots:
