@@ -32,7 +32,7 @@ compatibility surface: renaming or removing one is a breaking change for every
 consumer. Add inputs with safe defaults rather than repurposing existing ones.
 Full reference: [docs/configuration.md](docs/configuration.md).
 
-## Two operational invariants that must not regress
+## Three operational invariants that must not regress
 
 - **Fail, don't cancel (screenshots).** The capture script enforces its own
   `capture-deadline-ms`, kept below the job `timeout-minutes`, and exits non-zero
@@ -40,6 +40,15 @@ Full reference: [docs/configuration.md](docs/configuration.md).
   _cancellation_ escalated to a human. Keep the deadline below the timeout.
 - **Fork safety.** The screenshots job is skipped on fork PRs; the classic PAT
   must never reach fork-authored code. See [docs/authentication.md](docs/authentication.md).
+- **Build the capture bundle outside the consumer's workspace.** The screenshots
+  workflow checks this repo out to `_storybook-ci` (`actions/checkout` refuses any
+  path outside `GITHUB_WORKSPACE`) and then **moves it to `$RUNNER_TEMP`** before
+  installing. Nested under the consumer checkout it inherits their ancestor files —
+  a root `pnpm-workspace.yaml` redirects the install to the consumer's dependency
+  graph, and a root `.npmrc` scoping a private registry then 401s on packages we
+  never declared. Our install also uses the pnpm **our** `package.json` pins, not
+  the consumer's. Keep the move, and keep the two `pnpm/action-setup` steps
+  separate. See [docs/consuming.md](docs/consuming.md).
 
 ## Reusable-workflow gotcha: no `./`-local actions across the boundary
 

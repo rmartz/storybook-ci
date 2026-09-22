@@ -93,3 +93,22 @@ published package — it checks `rmartz/storybook-ci` out at the exact SHA the
 consumer pinned (`job.workflow_sha`), builds the bundle, and runs it. So a pinned
 ref is fully reproducible, and the version lives only in the git tag Dependabot
 bumps — never hardcoded in a workflow file.
+
+That bundle builds in **isolation from your repository**. `actions/checkout`
+refuses any path outside `GITHUB_WORKSPACE`, so the checkout lands at
+`_storybook-ci` inside your checkout and the workflow immediately moves it to
+`$RUNNER_TEMP` before installing anything. That matters because a package manager
+reads the directories _above_ the one it installs in: a root `pnpm-workspace.yaml`
+would make our install resolve **your** dependency graph instead of ours, and a
+root `.npmrc` scoping a private registry (`@scope:registry=…` with an auth token
+we are not given) would then fail that install with `ERR_PNPM_FETCH_401` on
+packages we never declared. The install also runs under the pnpm **our**
+`package.json` pins, so your pnpm major cannot break it.
+
+Two consequences for you:
+
+- Nothing in your `.npmrc`, `pnpm-workspace.yaml`, or lockfile affects the capture
+  bundle, and you do **not** need to grant `packages: read` or pass a registry
+  token for it.
+- `_storybook-ci` never survives into your install step, so a workspace that globs
+  broadly (`packages: ['**']`) will not pick it up as a member.
