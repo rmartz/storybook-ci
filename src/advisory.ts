@@ -39,7 +39,7 @@ export function buildAdvisoryBody(
 
 Storybook screenshots are configured for this PR, but the gallery could not be posted because ${reason}.
 
-This is **advisory only** — it does **not** block the PR. To restore the gallery, set a classic PAT (\`repo\` scope) as the \`STORYBOOK_SCREENSHOT_PAT\` secret, then re-run the job. See ${docsUrl}.
+This is **advisory only** — it does **not** block the PR. To restore the gallery, set a fine-grained PAT with \`Pull requests: Read and write\` on this repository as the \`STORYBOOK_SCREENSHOT_PAT\` secret, then re-run the job. See ${docsUrl}.
 
 <sub>storybook-ci</sub>`;
 }

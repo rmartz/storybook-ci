@@ -38,8 +38,8 @@ Full reference: [docs/configuration.md](docs/configuration.md).
   `capture-deadline-ms`, kept below the job `timeout-minutes`, and exits non-zero
   on the deadline or a broken story — a _failure_ routed to fix-review, not a
   _cancellation_ escalated to a human. Keep the deadline below the timeout.
-- **Fork safety.** The screenshots job is skipped on fork PRs; the classic PAT
-  must never reach fork-authored code. See [docs/authentication.md](docs/authentication.md).
+- **Fork safety.** The screenshots job is skipped on fork PRs; the
+  `STORYBOOK_SCREENSHOT_PAT` must never reach fork-authored code. See [docs/authentication.md](docs/authentication.md).
 - **Build the capture bundle outside the consumer's workspace.** The screenshots
   workflow checks this repo out to `_storybook-ci` (`actions/checkout` refuses any
   path outside `GITHUB_WORKSPACE`) and then **moves it to `$RUNNER_TEMP`** before
