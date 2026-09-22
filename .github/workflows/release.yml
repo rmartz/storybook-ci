@@ -11,10 +11,9 @@ name: Release
 # reusable workflows: each vX.Y.Z tag is a bumpable ref. Only the built-in
 # GITHUB_TOKEN is used — no PAT, no commit-back to a protected branch.
 #
-# Staying on 0.x: while pre-1.0, a breaking change is capped at a MINOR bump (see
-# the `{ "breaking": true, "release": "minor" }` rule in .releaserc.json) so an
-# accidental `!` cannot auto-jump to 1.0.0. Cutting 1.0.0 is a deliberate manual
-# act at go-live, after which that cap rule is removed and breaking → major resumes.
+# Version mapping is standard SemVer from the conventionalcommits preset: feat →
+# minor, fix/perf → patch, a breaking `!` → major. The first release cut v1.0.0,
+# so this is a 1.x line with no pre-1.0 cap.
 
 on:
   push:
