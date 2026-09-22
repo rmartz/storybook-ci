@@ -112,6 +112,11 @@ jobs:
     # Forked PRs receive a read-only token and (rightly) no PAT, so skip them —
     # the classic PAT must NEVER be exposed to fork-authored code.
     if: github.event.pull_request.head.repo.full_name == github.repository
+    # Storybook phones home on every invocation unless told not to. CI is not a
+    # useful telemetry sample and the call is latency + a network dependency we
+    # don't want, so opt out for every step in the job.
+    env:
+      STORYBOOK_DISABLE_TELEMETRY: '1'
     steps:
       - name: Check out the consumer repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
