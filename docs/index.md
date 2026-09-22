@@ -17,7 +17,8 @@ Documentation for `storybook-ci`, the fleet's shared Storybook CI, written in
   default, and what it controls.
 - [Change filtering](change-filtering.md) — how changed files map to the stories
   that get screenshotted, the resolver modes, and the residual gap of each.
-- [Authentication](authentication.md) — why screenshot posting needs a classic
-  PAT and how the secret reaches the workflow safely.
+- [Authentication](authentication.md) — why screenshot posting needs a user-level
+  PAT, the tested minimum permissions for a fine-grained one, and how the secret
+  reaches the workflow safely.
 - [The OKF documentation format](okf-format.md) — how these pages are structured
   and validated in this repo.

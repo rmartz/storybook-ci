@@ -44,9 +44,10 @@ few.
 
 ## Secret
 
-- **`STORYBOOK_SCREENSHOT_PAT`** — a **classic PAT** with `repo` scope, provided
-  via `secrets: inherit`. The screenshots workflow authenticates `gh` with it to
-  upload the gallery images. The whole screenshots job is skipped on fork PRs so
+- **`STORYBOOK_SCREENSHOT_PAT`** — a **fine-grained PAT** scoped to the consuming
+  repository with `Pull requests: Read and write` (a classic PAT with `repo` scope
+  also works), provided via `secrets: inherit`. The screenshots workflow
+  authenticates `gh` with it to upload the gallery images. The whole screenshots job is skipped on fork PRs so
   the PAT is never exposed to fork-authored code. See
   [authentication.md](authentication.md).
 

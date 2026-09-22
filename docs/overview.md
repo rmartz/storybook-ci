@@ -27,18 +27,18 @@ copies.
 
 ## The two reusable workflows
 
-| Workflow                                                                      | Gating?      | Trigger permissions                       | Secrets                            | What it does                                                                                                              |
-| ----------------------------------------------------------------------------- | ------------ | ----------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| [`storybook-tests.yml`](../.github/workflows/storybook-tests.yml)             | **gating**   | `contents: read`                          | none                               | Runs the browser test project and (optionally) the gating `build-storybook`. Change-gated by a `detect-changes` denylist. |
-| [`storybook-screenshots.yml`](../.github/workflows/storybook-screenshots.yml) | **advisory** | `contents: read` + `pull-requests: write` | classic PAT via `secrets: inherit` | Builds Storybook, screenshots the resolved-changed stories, posts the gallery via `gh --attach`.                          |
+| Workflow                                                                      | Gating?      | Trigger permissions                       | Secrets                                 | What it does                                                                                                              |
+| ----------------------------------------------------------------------------- | ------------ | ----------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| [`storybook-tests.yml`](../.github/workflows/storybook-tests.yml)             | **gating**   | `contents: read`                          | none                                    | Runs the browser test project and (optionally) the gating `build-storybook`. Change-gated by a `detect-changes` denylist. |
+| [`storybook-screenshots.yml`](../.github/workflows/storybook-screenshots.yml) | **advisory** | `contents: read` + `pull-requests: write` | fine-grained PAT via `secrets: inherit` | Builds Storybook, screenshots the resolved-changed stories, posts the gallery via `gh --attach`.                          |
 
 A consuming repo may adopt either or both. See [consuming.md](consuming.md).
 
 ## Why a reusable workflow, not a composite action
 
-Two things decide it. First, the screenshots workflow needs a **classic PAT** (the
-GitHub user-attachments upload endpoint rejects the Actions `GITHUB_TOKEN` — see
-[authentication.md](authentication.md)), and `secrets: inherit` on a reusable
+Two things decide it. First, the screenshots workflow needs a **user-level PAT**
+(the GitHub user-attachments upload endpoint rejects the Actions `GITHUB_TOKEN` —
+see [authentication.md](authentication.md)), and `secrets: inherit` on a reusable
 workflow passes it cleanly where a composite action would force it into an
 explicit `with:` input. Second, the most valuable thing to centralize is the
 ~50 lines of subtle operational reasoning (triggers, concurrency, fork-skip,

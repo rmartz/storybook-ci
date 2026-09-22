@@ -52,7 +52,7 @@ permissions:
 jobs:
   screenshots:
     uses: rmartz/storybook-ci/.github/workflows/storybook-screenshots.yml@<sha> # vX.Y.Z
-    secrets: inherit # provides STORYBOOK_SCREENSHOT_PAT (classic PAT)
+    secrets: inherit # provides STORYBOOK_SCREENSHOT_PAT (fine-grained PAT)
 ```
 
 Both scopes are required: a caller's `permissions:` block is exhaustive — every
@@ -63,6 +63,12 @@ The screenshots caller needs **no** `concurrency` or `continue-on-error` block �
 per-PR concurrency and the advisory isolation are centralized in the reusable
 workflow. `secrets: inherit` is what forwards `STORYBOOK_SCREENSHOT_PAT`; see
 [authentication.md](authentication.md).
+
+When validating a newly-configured PAT, use a PR that actually touches a story
+file or a co-located component. On a PR whose changes resolve to zero stories the
+gate short-circuits everything after it — including the PAT check — so the job
+goes green **without having exercised the token at all**. See
+[authentication.md](authentication.md#verifying-your-setup--a-green-job-is-not-proof).
 
 ## What adoption removes
 

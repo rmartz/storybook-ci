@@ -9,7 +9,7 @@ name: Storybook Screenshots (reusable)
 #   jobs:
 #     screenshots:
 #       uses: rmartz/storybook-ci/.github/workflows/storybook-screenshots.yml@<sha>  # vX.Y.Z
-#       secrets: inherit   # provides STORYBOOK_SCREENSHOT_PAT (classic PAT)
+#       secrets: inherit   # provides STORYBOOK_SCREENSHOT_PAT (fine-grained PAT)
 #
 # The advisory isolation (continue-on-error), per-PR concurrency, fork-skip,
 # fail-vs-cancel, change gating, and Chromium provisioning all live here — the
@@ -86,7 +86,7 @@ on:
         default: 2.99.0
     secrets:
       STORYBOOK_SCREENSHOT_PAT:
-        description: 'Classic PAT (repo scope) that authorizes gh --attach uploads.'
+        description: 'Fine-grained PAT (Pull requests: read/write) that authorizes gh --attach uploads. A classic repo-scoped PAT also works.'
         required: false
 
 permissions:
@@ -110,7 +110,7 @@ jobs:
     continue-on-error: true
     timeout-minutes: ${{ inputs.timeout-minutes }}
     # Forked PRs receive a read-only token and (rightly) no PAT, so skip them —
-    # the classic PAT must NEVER be exposed to fork-authored code.
+    # the PAT must NEVER be exposed to fork-authored code.
     if: github.event.pull_request.head.repo.full_name == github.repository
     # Storybook phones home on every invocation unless told not to. CI is not a
     # useful telemetry sample and the call is latency + a network dependency we
@@ -273,7 +273,7 @@ jobs:
 
       - name: Capture screenshots and post PR comment
         # Only reached when the PAT preflight passed, so the token is present and
-        # authenticates. gh authenticates with the classic PAT — the
+        # authenticates. gh authenticates with STORYBOOK_SCREENSHOT_PAT — the
         # user-attachments upload endpoint rejects the Actions GITHUB_TOKEN (an
         # installation token). ACTIONS_TOKEN is passed only so an upload failure can
         # post the advisory comment. See docs/authentication.md.
