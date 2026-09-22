@@ -45,6 +45,11 @@ on:
         type: boolean
         required: false
         default: true
+      build-needs-browser:
+        description: 'Install and cache the Playwright browser in the Storybook Build job, for a build-command that renders the built bundle.'
+        type: boolean
+        required: false
+        default: false
       browser:
         description: 'Playwright browser(s) to install/cache.'
         type: string
@@ -165,13 +170,19 @@ jobs:
 
   storybook-build:
     name: Storybook Build
+    # Browser-free by default, so the default budget stays at the 5 minutes a
+    # compile check needs; `build-needs-browser` adds an uncached ~130 MB Chromium
+    # download plus a render pass, so that path gets the same 8 minutes the test
+    # job runs on. The extra headroom is scoped to the consumers who opt in.
+    timeout-minutes: ${{ inputs.build-needs-browser && 8 || 5 }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     needs: detect-changes
     # Gating coverage for the production Storybook bundle: build-storybook uses a
     # different entrypoint/bundler than the app build and is a render surface the
     # vitest storybook project never exercises, so neither covers it. Browser-free
-    # (build only), so it installs no Playwright browser.
+    # (build only) unless `build-needs-browser` is set, which provisions the same
+    # cached Playwright browser the test job uses so a build-command may follow the
+    # build with a render assertion against the built bundle.
     if: inputs.run-build && needs.detect-changes.outputs.run == 'true'
     env:
       STORYBOOK_DISABLE_TELEMETRY: '1'
@@ -195,6 +206,41 @@ jobs:
             yarn) yarn install --frozen-lockfile ;;
             *) echo "Unsupported package-manager: $PM" >&2; exit 1 ;;
           esac
+      # A third copy of the FR-1 provisioning (see AGENTS.md): Actions supports
+      # neither YAML anchors nor a `./`-local composite action across the reusable-
+      # workflow boundary, so the steps are inlined rather than shared. Deliberately
+      # the SAME cache key as the test job — same browser, same lockfile — so the
+      # two jobs share one entry rather than paying two downloads; if both miss and
+      # race to save, the loser logs a benign "cache already exists" warning.
+      - name: Cache Playwright browsers
+        if: inputs.build-needs-browser
+        id: playwright-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ inputs.browser }}-${{ hashFiles('**/pnpm-lock.yaml', '**/package-lock.json', '**/yarn.lock') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-${{ inputs.browser }}-
+      - name: Install Playwright browser
+        if: inputs.build-needs-browser
+        shell: bash
+        env:
+          PM: ${{ inputs.package-manager }}
+          BROWSER: ${{ inputs.browser }}
+          CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          if [ "$CACHE_HIT" = "true" ]; then sub="install-deps"; else sub="install --with-deps"; fi
+          case "$PM" in
+            pnpm) runner="pnpm exec playwright" ;;
+            npm) runner="npx --yes playwright" ;;
+            yarn) runner="yarn playwright" ;;
+          esac
+          for i in 1 2 3; do
+            if $runner $sub $BROWSER; then exit 0; fi
+            echo "playwright install failed (attempt $i/3) — retrying in 5s"; sleep 5
+          done
+          exit 1
       - name: Build Storybook
         shell: bash
         run: ${{ inputs.build-command }}
