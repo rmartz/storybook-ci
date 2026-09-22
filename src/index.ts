@@ -6,6 +6,8 @@
 export { resolveStories } from './resolve-stories.js';
 export { captureStories } from './capture.js';
 export { postScreenshotComment } from './comment.js';
+export { buildAdvisoryBody, postAdvisory, clearAdvisory } from './advisory.js';
+export type { PatStatus, AdvisoryOptions } from './advisory.js';
 export { readStoryEntries, storyFilesFromEntries, normalizeImportPath } from './story-index.js';
 export { findFiles } from './lib/find-files.js';
 export { SCREENSHOT_RESOLVERS } from './types.js';
