@@ -1,0 +1,62 @@
+{
+  "name": "@rmartz/storybook-ci",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared Storybook CI for the fleet's Next.js repos: Chromium provisioning, Storybook interaction/render tests, and per-PR screenshot galleries posted via gh --attach — distributed as two reusable workflows kept current by Dependabot.",
+  "keywords": [
+    "ci",
+    "storybook",
+    "screenshots",
+    "playwright",
+    "github-actions",
+    "reusable-workflow"
+  ],
+  "homepage": "https://github.com/rmartz/storybook-ci#readme",
+  "bugs": {
+    "url": "https://github.com/rmartz/storybook-ci/issues"
+  },
+  "type": "module",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rmartz/storybook-ci.git"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/picomatch": "^4.0.3",
+    "@typescript-eslint/eslint-plugin": "^8.70.0",
+    "@typescript-eslint/parser": "^8.70.0",
+    "@vitest/coverage-v8": "^5.0.1",
+    "conventional-changelog-conventionalcommits": "^10.4.0",
+    "eslint": "^10.11.0",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
+    "prettier": "^3.9.8",
+    "semantic-release": "^25.0.9",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  },
+  "dependencies": {
+    "picomatch": "^4.0.2",
+    "playwright": "^1.56.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild": ">=0.28.1"
+    }
+  }
+}

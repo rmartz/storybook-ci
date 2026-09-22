@@ -1,0 +1,24 @@
+name: bot-automerge
+
+# Consumer caller for @rmartz/bot-automerge — enables GitHub-native auto-merge on
+# trusted bot PRs (Dependabot patch/minor bumps, release-please release PRs). It
+# posts no check-run and gates nothing itself: the actual merge still waits on this
+# repo's required status checks (merge-safety + CI), which is why bot-automerge is
+# adopted only after merge-safety is required on the default branch. SHA-pinned +
+# Dependabot-bumped.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
+
+permissions:
+  contents: write # enable GitHub-native auto-merge on the PR
+  pull-requests: write # read PR metadata + turn on auto-merge
+  packages: read # install the CLI from GitHub Packages
+
+jobs:
+  bot-automerge:
+    uses: rmartz/bot-automerge/.github/workflows/bot-automerge.yml@b344067efe19bdb8ad22588449e5d9682dfaa41f # bot-automerge-v0.1.3
+    with:
+      pr: ${{ github.event.pull_request.number }}
+    secrets: inherit

@@ -1,0 +1,193 @@
+name: Storybook Tests (reusable)
+
+# Gating Storybook CI for a consuming repo: the vitest browser test project and
+# (optionally) the production `build-storybook`. A consumer pins this by SHA and
+# passes a handful of inputs; the subtle reasoning (Chromium provisioning +
+# caching, change gating, fail-vs-cancel) lives here, once.
+#
+#   jobs:
+#     storybook-tests:
+#       uses: rmartz/storybook-ci/.github/workflows/storybook-tests.yml@<sha>  # vX.Y.Z
+#       with:
+#         test-command: pnpm exec vitest run --project storybook
+#
+# Required-checks note: if a consumer adds `Storybook Tests` to the default-branch
+# ruleset's required checks, it MUST stay change-gated by the `detect-changes` job
+# + per-job `if:` (a skipped required job counts as passing) — NEVER `on.paths` on
+# a required check, which hangs the PR forever. That is why gating is a job here,
+# not a path filter. See docs/consuming.md.
+
+on:
+  workflow_call:
+    inputs:
+      package-manager:
+        description: 'pnpm | npm | yarn — drives install + exec.'
+        type: string
+        required: false
+        default: pnpm
+      node-version:
+        description: 'Node.js version for the toolchain.'
+        type: string
+        required: false
+        default: 24.x
+      test-command:
+        description: 'The browser test project command.'
+        type: string
+        required: false
+        default: pnpm exec vitest run --project storybook
+      build-command:
+        description: 'The gating production Storybook build.'
+        type: string
+        required: false
+        default: pnpm build-storybook
+      run-build:
+        description: 'Also run the gating build-storybook job.'
+        type: boolean
+        required: false
+        default: true
+      browser:
+        description: 'Playwright browser(s) to install/cache.'
+        type: string
+        required: false
+        default: chromium
+      change-filter:
+        description: 'denylist (skip docs-only) | always | off.'
+        type: string
+        required: false
+        default: denylist
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    name: Detect code changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    outputs:
+      run: ${{ steps.detect.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          CHANGE_FILTER: ${{ inputs.change-filter }}
+        run: |
+          set -euo pipefail
+          # `always`/`off` never gate; only `denylist` skips a docs-only PR. A
+          # non-pull_request event (push to the default branch) always runs.
+          if [ "$CHANGE_FILTER" != "denylist" ] || [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch --quiet origin "$BASE_REF"
+          changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
+          echo "Changed files:"
+          echo "$changed"
+          # DENYLIST, not an allowlist: anything not matched below fails SAFE and
+          # runs the suite. Only provably-inert docs are skipped.
+          run=false
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            case "$file" in
+              *.mdx) run=true; break;;
+              *.md | docs/* | LICENSE | *.txt) ;;
+              *) run=true; break;;
+            esac
+          done <<< "$changed"
+          echo "Resolved run=$run"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+  storybook-tests:
+    name: Storybook Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    needs: detect-changes
+    if: needs.detect-changes.outputs.run == 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        if: inputs.package-manager == 'pnpm'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ inputs.package-manager }}
+      - name: Install dependencies
+        shell: bash
+        env:
+          PM: ${{ inputs.package-manager }}
+        run: |
+          set -euo pipefail
+          case "$PM" in
+            pnpm) pnpm install --frozen-lockfile ;;
+            npm) npm ci ;;
+            yarn) yarn install --frozen-lockfile ;;
+            *) echo "Unsupported package-manager: $PM" >&2; exit 1 ;;
+          esac
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ inputs.browser }}-${{ hashFiles('**/pnpm-lock.yaml', '**/package-lock.json', '**/yarn.lock') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-${{ inputs.browser }}-
+      - name: Install Playwright browser
+        shell: bash
+        env:
+          PM: ${{ inputs.package-manager }}
+          BROWSER: ${{ inputs.browser }}
+          CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          if [ "$CACHE_HIT" = "true" ]; then sub="install-deps"; else sub="install --with-deps"; fi
+          case "$PM" in
+            pnpm) runner="pnpm exec playwright" ;;
+            npm) runner="npx --yes playwright" ;;
+            yarn) runner="yarn playwright" ;;
+          esac
+          for i in 1 2 3; do
+            if $runner $sub $BROWSER; then exit 0; fi
+            echo "playwright install failed (attempt $i/3) — retrying in 5s"; sleep 5
+          done
+          exit 1
+      - name: Run Storybook tests
+        shell: bash
+        run: ${{ inputs.test-command }}
+
+  storybook-build:
+    name: Storybook Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: detect-changes
+    # Gating coverage for the production Storybook bundle: build-storybook uses a
+    # different entrypoint/bundler than the app build and is a render surface the
+    # vitest storybook project never exercises, so neither covers it. Browser-free
+    # (build only), so it installs no Playwright browser.
+    if: inputs.run-build && needs.detect-changes.outputs.run == 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        if: inputs.package-manager == 'pnpm'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ inputs.package-manager }}
+      - name: Install dependencies
+        shell: bash
+        env:
+          PM: ${{ inputs.package-manager }}
+        run: |
+          set -euo pipefail
+          case "$PM" in
+            pnpm) pnpm install --frozen-lockfile ;;
+            npm) npm ci ;;
+            yarn) yarn install --frozen-lockfile ;;
+            *) echo "Unsupported package-manager: $PM" >&2; exit 1 ;;
+          esac
+      - name: Build Storybook
+        shell: bash
+        run: ${{ inputs.build-command }}

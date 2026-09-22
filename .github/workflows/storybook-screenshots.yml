@@ -1,0 +1,242 @@
+name: Storybook Screenshots (reusable)
+
+# Advisory per-PR screenshot gallery for a consuming repo. Builds the repo's
+# Storybook, screenshots the stories a PR's changes touch, and posts them as one
+# update-in-place PR comment whose images are GitHub user-attachments uploaded by
+# `gh --attach` (no orphan branch, no cleanup workflow). The consumer caller is
+# ~4 lines:
+#
+#   jobs:
+#     screenshots:
+#       uses: rmartz/storybook-ci/.github/workflows/storybook-screenshots.yml@<sha>  # vX.Y.Z
+#       secrets: inherit   # provides STORYBOOK_SCREENSHOT_PAT (classic PAT)
+#
+# The advisory isolation (continue-on-error), per-PR concurrency, fork-skip,
+# fail-vs-cancel, change gating, and Chromium provisioning all live here — the
+# whole point of centralizing. See docs/consuming.md and docs/authentication.md.
+
+on:
+  workflow_call:
+    inputs:
+      package-manager:
+        description: 'pnpm | npm | yarn — drives the consumer install + build.'
+        type: string
+        required: false
+        default: pnpm
+      node-version:
+        type: string
+        required: false
+        default: 24.x
+      build-command:
+        description: 'Command that produces the static Storybook bundle.'
+        type: string
+        required: false
+        default: pnpm build-storybook
+      static-dir:
+        description: 'Where index.json + assets land, relative to the repo root.'
+        type: string
+        required: false
+        default: storybook-static
+      story-globs:
+        description: 'Globs for story files (newline/comma separated).'
+        type: string
+        required: false
+        default: src/**/*.stories.@(ts|tsx)
+      component-globs:
+        description: 'Globs for UI files that resolve to co-located stories.'
+        type: string
+        required: false
+        default: src/**/*.@(ts|tsx)
+      storybook-config-globs:
+        description: 'Globs whose change forces a full capture.'
+        type: string
+        required: false
+        default: .storybook/**
+      screenshot-resolver:
+        description: 'colocation | changed-stories-only | all | import-graph.'
+        type: string
+        required: false
+        default: colocation
+      viewport:
+        type: string
+        required: false
+        default: 1280x720
+      browser:
+        type: string
+        required: false
+        default: chromium
+      capture-deadline-ms:
+        description: 'Fail-not-cancel budget (keep below timeout-minutes).'
+        type: string
+        required: false
+        default: '240000'
+      timeout-minutes:
+        description: 'Backstop job timeout (must exceed the capture deadline).'
+        type: number
+        required: false
+        default: 8
+      comment-marker:
+        type: string
+        required: false
+        default: '<!-- storybook-screenshots-bot -->'
+      gh-version:
+        description: 'Exact gh version to install for --attach support (>= 2.99.0).'
+        type: string
+        required: false
+        default: 2.99.0
+    secrets:
+      STORYBOOK_SCREENSHOT_PAT:
+        description: 'Classic PAT (repo scope) that authorizes gh --attach uploads.'
+        required: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# Per-PR concurrency: serialize only same-PR runs (cancel the older when a newer
+# one starts). Centralized here so the caller needs no concurrency block.
+concurrency:
+  group: storybook-screenshots-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    name: Capture Storybook Screenshots
+    runs-on: ubuntu-latest
+    # Advisory: preview tooling, not a correctness gate. It depends on Playwright,
+    # gh, and the network, any of which can fail transiently — a failure must never
+    # block a merge, so continue-on-error keeps the run green regardless while the
+    # job itself still shows red (routed to fix-review). See capture.ts.
+    continue-on-error: true
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    # Forked PRs receive a read-only token and (rightly) no PAT, so skip them —
+    # the classic PAT must NEVER be exposed to fork-authored code.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Check out the consumer repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed files
+        id: changes
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin "$BASE_REF"
+          changed=$(git diff --name-only --diff-filter=ACMR "origin/$BASE_REF...HEAD")
+          echo "Changed files:"; echo "$changed"
+          printf 'files<<EOF\n%s\nEOF\n' "$changed" >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Check out storybook-ci (its own pinned SHA)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: _storybook-ci
+
+      - name: Build storybook-ci capture bundle
+        run: pnpm -C _storybook-ci install --frozen-lockfile && pnpm -C _storybook-ci build
+
+      - name: Resolve stories to capture (gate)
+        id: gate
+        env:
+          CHANGED_FILES: ${{ steps.changes.outputs.files }}
+          WORKSPACE: ${{ github.workspace }}
+          STORY_GLOBS: ${{ inputs.story-globs }}
+          COMPONENT_GLOBS: ${{ inputs.component-globs }}
+          STORYBOOK_CONFIG_GLOBS: ${{ inputs.storybook-config-globs }}
+          RESOLVER: ${{ inputs.screenshot-resolver }}
+        run: node _storybook-ci/dist/bin/screenshots.js gate
+
+      - name: Install consumer dependencies
+        if: steps.gate.outputs.run == 'true'
+        env:
+          PM: ${{ inputs.package-manager }}
+        run: |
+          set -euo pipefail
+          case "$PM" in
+            pnpm) pnpm install --frozen-lockfile ;;
+            npm) npm ci ;;
+            yarn) yarn install --frozen-lockfile ;;
+            *) echo "Unsupported package-manager: $PM" >&2; exit 1 ;;
+          esac
+
+      - name: Build Storybook
+        if: steps.gate.outputs.run == 'true'
+        run: ${{ inputs.build-command }}
+
+      - name: Cache Playwright browsers
+        if: steps.gate.outputs.run == 'true'
+        id: playwright-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ inputs.browser }}-${{ hashFiles('_storybook-ci/pnpm-lock.yaml') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-${{ inputs.browser }}-
+
+      - name: Install Playwright browser
+        if: steps.gate.outputs.run == 'true'
+        env:
+          BROWSER: ${{ inputs.browser }}
+          CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          if [ "$CACHE_HIT" = "true" ]; then sub="install-deps"; else sub="install --with-deps"; fi
+          for i in 1 2 3; do
+            if pnpm -C _storybook-ci exec playwright $sub $BROWSER; then exit 0; fi
+            echo "playwright install failed (attempt $i/3) — retrying in 5s"; sleep 5
+          done
+          exit 1
+
+      - name: Install gh (for --attach)
+        if: steps.gate.outputs.run == 'true'
+        env:
+          GH_VERSION: ${{ inputs.gh-version }}
+        run: |
+          set -euo pipefail
+          # Install the pinned gh explicitly: runners did not ship gh >= 2.99.0
+          # (the --attach floor) at POC time, so do not depend on the preinstalled
+          # one. /usr/local/bin precedes /usr/bin on PATH, so this shadows it.
+          tmp="$(mktemp -d)"
+          curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" \
+            -o "$tmp/gh.tgz"
+          tar -xzf "$tmp/gh.tgz" -C "$tmp"
+          sudo mv "$tmp/gh_${GH_VERSION}_linux_amd64/bin/gh" /usr/local/bin/gh
+          gh --version
+
+      - name: Capture screenshots and post PR comment
+        if: steps.gate.outputs.run == 'true'
+        env:
+          # gh authenticates with the classic PAT — the user-attachments upload
+          # endpoint rejects the Actions GITHUB_TOKEN (an installation token). See
+          # docs/authentication.md.
+          GH_TOKEN: ${{ secrets.STORYBOOK_SCREENSHOT_PAT }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHANGED_FILES: ${{ steps.changes.outputs.files }}
+          STATIC_DIR: ${{ github.workspace }}/${{ inputs.static-dir }}
+          STORY_GLOBS: ${{ inputs.story-globs }}
+          COMPONENT_GLOBS: ${{ inputs.component-globs }}
+          STORYBOOK_CONFIG_GLOBS: ${{ inputs.storybook-config-globs }}
+          RESOLVER: ${{ inputs.screenshot-resolver }}
+          VIEWPORT: ${{ inputs.viewport }}
+          CAPTURE_DEADLINE_MS: ${{ inputs.capture-deadline-ms }}
+          COMMENT_MARKER: ${{ inputs.comment-marker }}
+          OUTPUT_DIR: ${{ runner.temp }}/storybook-screenshots-out
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "STORYBOOK_SCREENSHOT_PAT is not set — skipping screenshot posting."
+            echo "Provide it via 'secrets: inherit' from the caller (docs/authentication.md)."
+            exit 0
+          fi
+          node _storybook-ci/dist/bin/screenshots.js capture

@@ -1,0 +1,44 @@
+name: Release
+
+# Automatic releases, tag-as-source-of-truth. semantic-release runs on every push
+# to main: it analyzes the conventional-commit subjects since the last vX.Y.Z tag,
+# computes the next version, and creates the git tag + GitHub Release.
+#
+# This repo is CI-only and UNPUBLISHED — there is deliberately NO
+# @semantic-release/npm plugin (see .releaserc.json) and package.json stays a
+# `private` `0.0.0` placeholder. The release exists purely so Dependabot's
+# github-actions ecosystem can bump the `@<sha>` pins consumers put on the two
+# reusable workflows: each vX.Y.Z tag is a bumpable ref. Only the built-in
+# GITHUB_TOKEN is used — no PAT, no commit-back to a protected branch.
+#
+# Staying on 0.x: while pre-1.0, a breaking change is capped at a MINOR bump (see
+# the `{ "breaking": true, "release": "minor" }` rule in .releaserc.json) so an
+# accidental `!` cannot auto-jump to 1.0.0. Cutting 1.0.0 is a deliberate manual
+# act at go-live, after which that cap rule is removed and breaking → major resumes.
+
+on:
+  push:
+    branches: [main]
+
+# Serialize releases so two pushes can't publish concurrently.
+concurrency: release
+
+permissions:
+  contents: write # create tags and GitHub releases
+  issues: write # semantic-release comments on released issues
+  pull-requests: write # semantic-release comments on released PRs
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # semantic-release needs full history + tags
+          persist-credentials: false # authenticates via GITHUB_TOKEN below
+      - uses: ./.github/actions/setup
+      - run: pnpm exec semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
