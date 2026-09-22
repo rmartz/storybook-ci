@@ -50,6 +50,16 @@ few.
   the PAT is never exposed to fork-authored code. See
   [authentication.md](authentication.md).
 
+## Storybook telemetry is off (not an input)
+
+Every job that shells out to Storybook — `storybook-tests` and `storybook-build`
+in `storybook-tests.yml`, and `screenshots` in `storybook-screenshots.yml` — sets
+`STORYBOOK_DISABLE_TELEMETRY: '1'` as a job-level `env`. A consuming repo neither
+has to set it nor can turn it back on: CI is not a useful telemetry sample, and
+no caller wants the extra network round-trip, so it is fixed behavior rather than
+a permanent caller-facing input. The `detect-changes` job never invokes
+Storybook, so it does not set it.
+
 ## Why inputs, not a config file
 
 This surface is small and flat, so inputs beat a `.storybook-ci.yml` config file:

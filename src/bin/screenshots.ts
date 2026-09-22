@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Entry point for the screenshots reusable workflow. Two subcommands:
+ * Entry point for the screenshots reusable workflow. Three subcommands:
  *
  *   screenshots gate      Enumerate the repo's story files from the working tree
  *                         (no build needed), resolve which stories a PR's changes
@@ -9,6 +9,13 @@
  *                         Storybook build + Playwright capture when nothing
  *                         UI-relevant changed.
  *
+ *   screenshots preflight Check the screenshot PAT (present + able to auth) before
+ *                         the expensive build. Emits `pat_status` to $GITHUB_OUTPUT.
+ *                         When the PAT is missing/invalid it posts a non-blocking
+ *                         advisory comment (via the Actions token) so a reviewer
+ *                         learns the gallery is configured but can't post; when it
+ *                         is valid it clears any prior advisory.
+ *
  *   screenshots capture   Read the built `index.json`, resolve the changed
  *                         stories, screenshot them, and post/update the PR
  *                         gallery comment via `gh --attach`.
@@ -16,15 +23,21 @@
  * All configuration arrives as environment variables (set by the workflow from
  * its inputs), so nothing here is project-specific.
  */
+import { execFileSync } from 'node:child_process';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { clearAdvisory, postAdvisory } from '../advisory.js';
 import { captureStories } from '../capture.js';
 import { postScreenshotComment } from '../comment.js';
 import { findFiles } from '../lib/find-files.js';
 import { resolveStories } from '../resolve-stories.js';
 import { normalizeImportPath, readStoryEntries, storyFilesFromEntries } from '../story-index.js';
+import type { AdvisoryOptions, PatStatus } from '../advisory.js';
 import type { ResolveInput, ScreenshotResolver, StoryIndexEntry } from '../types.js';
+
+const ADVISORY_MARKER = '<!-- storybook-screenshots-advisory -->';
+const DEFAULT_DOCS_URL = 'https://github.com/rmartz/storybook-ci/blob/main/docs/authentication.md';
 
 function env(name: string, fallback = ''): string {
   return process.env[name] ?? fallback;
@@ -72,6 +85,45 @@ function runGate(): void {
   }
 }
 
+function advisoryOptions(): AdvisoryOptions {
+  return {
+    repo: env('REPO'),
+    prNumber: env('PR_NUMBER'),
+    token: env('ACTIONS_TOKEN'),
+    marker: ADVISORY_MARKER,
+    docsUrl: env('DOCS_URL', DEFAULT_DOCS_URL),
+  };
+}
+
+/** Does the PAT authenticate? A missing/expired/revoked token fails `gh api user`. */
+function patAuthenticates(pat: string): boolean {
+  try {
+    execFileSync('gh', ['api', 'user'], {
+      env: { ...process.env, GH_TOKEN: pat },
+      stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function runPreflight(): void {
+  const pat = env('SCREENSHOT_PAT');
+  const status: PatStatus = !pat ? 'missing' : patAuthenticates(pat) ? 'ok' : 'invalid';
+  console.log(`preflight: pat_status=${status}`);
+
+  const options = advisoryOptions();
+  if (status === 'ok') {
+    clearAdvisory(options);
+  } else {
+    postAdvisory(status, options);
+  }
+
+  const output = env('GITHUB_OUTPUT');
+  if (output) appendFileSync(output, `pat_status=${status}\n`);
+}
+
 async function runCapture(): Promise<void> {
   const staticDir = env('STATIC_DIR', 'storybook-static');
   const changedFiles = splitList(env('CHANGED_FILES'));
@@ -98,14 +150,22 @@ async function runCapture(): Promise<void> {
   });
 
   if (outcome.captured.length > 0) {
-    postScreenshotComment(outcome.captured, {
-      repo: env('REPO'),
-      prNumber: env('PR_NUMBER'),
-      headSha: env('PR_HEAD_SHA'),
-      outputDir,
-      marker: env('COMMENT_MARKER', '<!-- storybook-screenshots-bot -->'),
-    });
-    console.log(`Published ${outcome.captured.length} screenshot(s).`);
+    try {
+      postScreenshotComment(outcome.captured, {
+        repo: env('REPO'),
+        prNumber: env('PR_NUMBER'),
+        headSha: env('PR_HEAD_SHA'),
+        outputDir,
+        marker: env('COMMENT_MARKER', '<!-- storybook-screenshots-bot -->'),
+      });
+      console.log(`Published ${outcome.captured.length} screenshot(s).`);
+    } catch (error) {
+      // The PAT authenticated in preflight but the user-attachments upload was
+      // still rejected (e.g. missing scope). Alert the reviewer, non-blocking.
+      console.error(`Screenshot upload failed: ${error instanceof Error ? error.message : error}`);
+      postAdvisory('invalid', advisoryOptions());
+      process.exit(1);
+    }
   } else {
     console.log('No screenshots captured.');
   }
@@ -131,9 +191,11 @@ function selectEntries(
 const mode = process.argv[2];
 if (mode === 'gate') {
   runGate();
+} else if (mode === 'preflight') {
+  runPreflight();
 } else if (mode === 'capture') {
   await runCapture();
 } else {
-  console.error(`Unknown mode "${mode ?? ''}" — expected "gate" or "capture".`);
+  console.error(`Unknown mode "${mode ?? ''}" — expected "gate", "preflight", or "capture".`);
   process.exit(2);
 }

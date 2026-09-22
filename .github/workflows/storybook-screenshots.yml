@@ -112,6 +112,11 @@ jobs:
     # Forked PRs receive a read-only token and (rightly) no PAT, so skip them —
     # the classic PAT must NEVER be exposed to fork-authored code.
     if: github.event.pull_request.head.repo.full_name == github.repository
+    # Storybook phones home on every invocation unless told not to. CI is not a
+    # useful telemetry sample and the call is latency + a network dependency we
+    # don't want, so opt out for every step in the job.
+    env:
+      STORYBOOK_DISABLE_TELEMETRY: '1'
     steps:
       - name: Check out the consumer repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -155,8 +160,25 @@ jobs:
           RESOLVER: ${{ inputs.screenshot-resolver }}
         run: node _storybook-ci/dist/bin/screenshots.js gate
 
-      - name: Install consumer dependencies
+      # PAT preflight, before the expensive build. When the PAT is missing or
+      # invalid this posts a non-blocking advisory PR comment (via the Actions
+      # token, which can post a normal comment even though it can't do --attach) so
+      # a reviewer learns the gallery is configured but can't post — and the build
+      # is skipped. When the PAT is valid it clears any prior advisory. Uses the
+      # preinstalled gh (plain `gh api`, no --attach), so it runs before the gh
+      # 2.99 install below.
+      - name: Verify screenshot PAT
         if: steps.gate.outputs.run == 'true'
+        id: preflight
+        env:
+          SCREENSHOT_PAT: ${{ secrets.STORYBOOK_SCREENSHOT_PAT }}
+          ACTIONS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node _storybook-ci/dist/bin/screenshots.js preflight
+
+      - name: Install consumer dependencies
+        if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok'
         env:
           PM: ${{ inputs.package-manager }}
         run: |
@@ -169,11 +191,11 @@ jobs:
           esac
 
       - name: Build Storybook
-        if: steps.gate.outputs.run == 'true'
+        if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok'
         run: ${{ inputs.build-command }}
 
       - name: Cache Playwright browsers
-        if: steps.gate.outputs.run == 'true'
+        if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok'
         id: playwright-cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -183,7 +205,7 @@ jobs:
             playwright-${{ runner.os }}-${{ inputs.browser }}-
 
       - name: Install Playwright browser
-        if: steps.gate.outputs.run == 'true'
+        if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok'
         env:
           BROWSER: ${{ inputs.browser }}
           CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
@@ -197,7 +219,7 @@ jobs:
           exit 1
 
       - name: Install gh (for --attach)
-        if: steps.gate.outputs.run == 'true'
+        if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok'
         env:
           GH_VERSION: ${{ inputs.gh-version }}
         run: |
@@ -213,12 +235,15 @@ jobs:
           gh --version
 
       - name: Capture screenshots and post PR comment
-        if: steps.gate.outputs.run == 'true'
+        # Only reached when the PAT preflight passed, so the token is present and
+        # authenticates. gh authenticates with the classic PAT — the
+        # user-attachments upload endpoint rejects the Actions GITHUB_TOKEN (an
+        # installation token). ACTIONS_TOKEN is passed only so an upload failure can
+        # post the advisory comment. See docs/authentication.md.
+        if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok'
         env:
-          # gh authenticates with the classic PAT — the user-attachments upload
-          # endpoint rejects the Actions GITHUB_TOKEN (an installation token). See
-          # docs/authentication.md.
           GH_TOKEN: ${{ secrets.STORYBOOK_SCREENSHOT_PAT }}
+          ACTIONS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -232,11 +257,4 @@ jobs:
           CAPTURE_DEADLINE_MS: ${{ inputs.capture-deadline-ms }}
           COMMENT_MARKER: ${{ inputs.comment-marker }}
           OUTPUT_DIR: ${{ runner.temp }}/storybook-screenshots-out
-        run: |
-          set -euo pipefail
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "STORYBOOK_SCREENSHOT_PAT is not set — skipping screenshot posting."
-            echo "Provide it via 'secrets: inherit' from the caller (docs/authentication.md)."
-            exit 0
-          fi
-          node _storybook-ci/dist/bin/screenshots.js capture
+        run: node _storybook-ci/dist/bin/screenshots.js capture

@@ -32,14 +32,33 @@ PAT**.
 Set it ideally **org-wide** so every consuming repo inherits it; on a personal
 account it is a per-repo Actions secret named `STORYBOOK_SCREENSHOT_PAT`.
 
+## Missing or invalid PAT — advisory, never blocking
+
+A same-repo PR whose PAT is missing or invalid never fails the merge. Before the
+expensive Storybook build, a **preflight** step checks the PAT:
+
+- **missing** (secret not set) or **invalid** (set but fails to authenticate) → the
+  job posts a single, update-in-place **advisory PR comment** — "Storybook
+  screenshots are configured but the PAT is missing/invalid; this does not block the
+  PR" — and skips the build and capture. The comment is posted with the Actions
+  `GITHUB_TOKEN` (which can post a normal comment even though it cannot do
+  `--attach`), tagged with its own marker (`<!-- storybook-screenshots-advisory -->`)
+  so a reviewer sees exactly one notice.
+- **valid** → any prior advisory comment is deleted and the gallery is captured and
+  posted as usual.
+
+If the PAT authenticates in preflight but the user-attachments upload is still
+rejected (e.g. a token lacking the needed scope), the capture step posts the same
+advisory and exits non-zero — a red, **non-blocking** job (the whole screenshots
+job is `continue-on-error`). So the states are: valid → gallery; missing/invalid →
+advisory comment; and in every case the merge is never blocked.
+
 ## Fork safety
 
 The entire screenshots job is skipped when the PR head is a fork
 (`github.event.pull_request.head.repo.full_name != github.repository`). A classic
 PAT must **never** be exposed to fork-authored code, and a fork PR receives a
-read-only token anyway, so skipping is both the safe and the correct behavior. If
-the secret is absent on a same-repo PR, the capture step logs a clear notice and
-exits 0 rather than failing.
+read-only token anyway, so skipping is both the safe and the correct behavior.
 
 ## `gh` version
 
