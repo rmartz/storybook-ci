@@ -11,6 +11,12 @@ export interface PostOptions {
   outputDir: string;
   /** HTML marker that tags the single update-in-place comment. */
   marker: string;
+  /**
+   * Optional one-line PAT-expiry warning from the preflight, rendered as a
+   * footer. Empty in the ordinary case — a token with no expiration date, or one
+   * expiring beyond the warning threshold.
+   */
+  expiryNote?: string;
 }
 
 /**
@@ -22,9 +28,9 @@ export interface PostOptions {
  * hosting entirely. Update-in-place uses `--edit-last --create-if-none`, so a
  * re-run edits the bot's existing comment instead of stacking a new one.
  *
- * `gh` must be authenticated with a **classic PAT** (the user-attachments upload
- * endpoint rejects the Actions `GITHUB_TOKEN` — see docs/authentication.md); the
- * caller provides it via `GH_TOKEN` in the environment.
+ * `gh` must be authenticated with `STORYBOOK_SCREENSHOT_PAT` (the user-attachments
+ * upload endpoint rejects the Actions `GITHUB_TOKEN` — see docs/authentication.md);
+ * the caller provides it via `GH_TOKEN` in the environment.
  */
 export function postScreenshotComment(captured: CapturedStory[], options: PostOptions): void {
   const files = captured.map(({ story, buffer }) => {
@@ -56,13 +62,14 @@ export function postScreenshotComment(captured: CapturedStory[], options: PostOp
   execFileSync('gh', args, { cwd: options.outputDir, stdio: 'inherit' });
 }
 
-interface GalleryFile {
+export interface GalleryFile {
   story: CapturedStory['story'];
   fileName: string;
   alt: string;
 }
 
-function buildCommentBody(files: GalleryFile[], options: PostOptions): string {
+/** Exported so the rendered body — table, expiry footer, commit line — is unit-tested. */
+export function buildCommentBody(files: GalleryFile[], options: PostOptions): string {
   const shortSha = options.headSha.slice(0, 7);
   const rows = files
     .map(
@@ -71,13 +78,15 @@ function buildCommentBody(files: GalleryFile[], options: PostOptions): string {
     )
     .join('\n');
 
+  const footer = options.expiryNote ? `\n${options.expiryNote}\n` : '';
+
   return `${options.marker}
 ## 📸 Storybook Screenshots
 
 | Story | Preview |
 |---|---|
 ${rows}
-
+${footer}
 <sub>Generated from commit ${shortSha}</sub>`;
 }
 

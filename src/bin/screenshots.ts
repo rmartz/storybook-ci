@@ -28,6 +28,7 @@ import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { clearAdvisory, postAdvisory } from '../advisory.js';
+import { buildExpiryNotice, parseTokenExpiration } from '../pat-expiry.js';
 import { captureStories } from '../capture.js';
 import { postScreenshotComment } from '../comment.js';
 import { findFiles } from '../lib/find-files.js';
@@ -95,22 +96,27 @@ function advisoryOptions(): AdvisoryOptions {
   };
 }
 
-/** Does the PAT authenticate? A missing/expired/revoked token fails `gh api user`. */
-function patAuthenticates(pat: string): boolean {
+/**
+ * Does the PAT authenticate? A missing/expired/revoked token fails `gh api user`.
+ * `-i` includes the response headers, which carry the token's expiration date —
+ * the same request either way, so the expiry warning costs no extra API call.
+ */
+function patProbe(pat: string): { authenticates: boolean; response: string } {
   try {
-    execFileSync('gh', ['api', 'user'], {
+    const response = execFileSync('gh', ['api', '-i', 'user'], {
       env: { ...process.env, GH_TOKEN: pat },
-      stdio: 'ignore',
+      encoding: 'utf8',
     });
-    return true;
+    return { authenticates: true, response };
   } catch {
-    return false;
+    return { authenticates: false, response: '' };
   }
 }
 
 function runPreflight(): void {
   const pat = env('SCREENSHOT_PAT');
-  const status: PatStatus = !pat ? 'missing' : patAuthenticates(pat) ? 'ok' : 'invalid';
+  const probe = pat ? patProbe(pat) : null;
+  const status: PatStatus = !probe ? 'missing' : probe.authenticates ? 'ok' : 'invalid';
   console.log(`preflight: pat_status=${status}`);
 
   const options = advisoryOptions();
@@ -120,8 +126,31 @@ function runPreflight(): void {
     postAdvisory(status, options);
   }
 
+  // A valid-but-expiring token is NOT a failure: the status stays `ok` and the
+  // gallery still posts. The notice rides along on that comment rather than
+  // becoming a second one, which would fight clearAdvisory()'s delete-on-ok.
+  const notice =
+    status === 'ok'
+      ? buildExpiryNotice(
+          parseTokenExpiration(probe?.response ?? ''),
+          new Date(),
+          warningDays(),
+          options.docsUrl,
+        )
+      : null;
+  if (notice) console.log(`preflight: ${notice}`);
+
   const output = env('GITHUB_OUTPUT');
-  if (output) appendFileSync(output, `pat_status=${status}\n`);
+  if (output) {
+    appendFileSync(output, `pat_status=${status}\n`);
+    appendFileSync(output, `pat_expiry_note=${notice ?? ''}\n`);
+  }
+}
+
+/** Days before expiry that the warning starts; a non-numeric input falls back. */
+function warningDays(): number {
+  const parsed = Number(env('PAT_EXPIRY_WARNING_DAYS', ''));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 14;
 }
 
 async function runCapture(): Promise<void> {
@@ -157,6 +186,7 @@ async function runCapture(): Promise<void> {
         headSha: env('PR_HEAD_SHA'),
         outputDir,
         marker: env('COMMENT_MARKER', '<!-- storybook-screenshots-bot -->'),
+        expiryNote: env('PAT_EXPIRY_NOTE'),
       });
       console.log(`Published ${outcome.captured.length} screenshot(s).`);
     } catch (error) {
