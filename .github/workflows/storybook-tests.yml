@@ -107,6 +107,11 @@ jobs:
     timeout-minutes: 8
     needs: detect-changes
     if: needs.detect-changes.outputs.run == 'true'
+    # Storybook phones home on every invocation unless told not to. CI is not a
+    # useful telemetry sample and the call is latency + a network dependency we
+    # don't want, so opt out for every step in the job.
+    env:
+      STORYBOOK_DISABLE_TELEMETRY: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
@@ -168,6 +173,8 @@ jobs:
     # vitest storybook project never exercises, so neither covers it. Browser-free
     # (build only), so it installs no Playwright browser.
     if: inputs.run-build && needs.detect-changes.outputs.run == 'true'
+    env:
+      STORYBOOK_DISABLE_TELEMETRY: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
