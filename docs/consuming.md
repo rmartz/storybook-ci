@@ -26,6 +26,7 @@ on:
     branches: [main]
 permissions:
   contents: read
+  packages: read
 jobs:
   storybook-tests:
     uses: rmartz/storybook-ci/.github/workflows/storybook-tests.yml@<sha> # vX.Y.Z
@@ -48,6 +49,7 @@ on:
       - '.storybook/**'
 permissions:
   contents: read
+  packages: read
   pull-requests: write
 jobs:
   screenshots:
@@ -55,9 +57,10 @@ jobs:
     secrets: inherit # provides STORYBOOK_SCREENSHOT_PAT (fine-grained PAT)
 ```
 
-Both scopes are required: a caller's `permissions:` block is exhaustive — every
-scope it omits becomes `none` — and the reusable workflow checks out the consumer
-repo, so omitting `contents: read` fails the run at checkout.
+Every scope listed is required: a caller's `permissions:` block is exhaustive —
+every scope it omits becomes `none` — and the reusable workflow checks out the
+consumer repo, so omitting `contents: read` fails the run at checkout. For
+`packages: read`, see [below](#private-registry-dependencies).
 
 The screenshots caller needs **no** `concurrency` or `continue-on-error` block —
 per-PR concurrency and the advisory isolation are centralized in the reusable
@@ -115,6 +118,37 @@ Two consequences for you:
 
 - Nothing in your `.npmrc`, `pnpm-workspace.yaml`, or lockfile affects the capture
   bundle, and you do **not** need to grant `packages: read` or pass a registry
-  token for it.
+  token _for it_ — your own install is a separate matter, covered next.
 - `_storybook-ci` never survives into your install step, so a workspace that globs
   broadly (`packages: ['**']`) will not pick it up as a member.
+
+## Private-registry dependencies
+
+Your **own** install — the step that runs `pnpm install` / `npm ci` / `yarn
+install` in your checkout — does read your `.npmrc`. If it scopes a package to
+GitHub Packages, that install needs credentials, and both workflows provide them:
+
+- the job token carries `packages: read`, so it can read same-owner packages; and
+- the install step exports `NODE_AUTH_TOKEN: ${{ github.token }}`, which is what
+  an `.npmrc` line like `//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}`
+  interpolates.
+
+No PAT is involved — `STORYBOOK_SCREENSHOT_PAT` authorizes gallery uploads only
+(see [authentication.md](authentication.md)) and never reaches the install.
+
+**You must list `packages: read` in your caller's `permissions:` block.** A called
+workflow can only narrow the caller's grant, never widen it, so the scope we
+declare is intersected with yours — declaring it only on our side does nothing.
+Omit it and the install fails with `ERR_PNPM_FETCH_401` and
+`No authorization header was set for the request`.
+
+Two things make this failure easy to miss:
+
+- It needs a **cold** package-manager store. A warm store resolves from cache
+  without a registry fetch, so a misconfigured repo can pass for months and then
+  fail the first time a PR changes the lockfile — i.e. on a Dependabot PR.
+- It needs a **private** dependency. A consumer with no `.npmrc` never
+  interpolates the token, so both settings are inert there and cost nothing.
+
+Cross-owner packages, which the built-in `GITHUB_TOKEN` cannot read, are not
+supported today; open an issue if you need one.

@@ -51,6 +51,15 @@ few.
   the PAT is never exposed to fork-authored code. See
   [authentication.md](authentication.md).
 
+## Caller permissions (not an input)
+
+Both workflows need `contents: read` and `packages: read`; the screenshots
+workflow also needs `pull-requests: write`. These are set in the **caller's**
+`permissions:` block, not passed as inputs — a called workflow can only narrow
+the caller's grant, so the scopes we declare are intersected with yours. See
+[consuming.md](consuming.md#private-registry-dependencies) for why
+`packages: read` is required even though it is inert in a repo with no `.npmrc`.
+
 ## Storybook telemetry is off (not an input)
 
 Every job that shells out to Storybook — `storybook-tests` and `storybook-build`

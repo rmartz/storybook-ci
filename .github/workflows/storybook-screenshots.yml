@@ -89,8 +89,13 @@ on:
         description: 'Fine-grained PAT (Pull requests: read/write) that authorizes gh --attach uploads. A classic repo-scoped PAT also works.'
         required: false
 
+# `packages: read` lets the job's GITHUB_TOKEN resolve same-owner GitHub Packages
+# for a consumer whose .npmrc scopes one. A called workflow can only narrow the
+# caller's grant, never widen it — so the caller must list `packages: read` too;
+# declaring it here keeps us from stripping a grant the caller did make.
 permissions:
   contents: read
+  packages: read
   pull-requests: write
 
 # Per-PR concurrency: serialize only same-PR runs (cancel the older when a newer
@@ -216,6 +221,11 @@ jobs:
         if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok'
         env:
           PM: ${{ inputs.package-manager }}
+          # What a consumer's .npmrc interpolates to reach a scoped registry.
+          # Inert when they have no .npmrc — nothing reads it. The capture-bundle
+          # install above deliberately gets no token: it runs outside the
+          # workspace under our package.json and reads no consumer .npmrc.
+          NODE_AUTH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           case "$PM" in
