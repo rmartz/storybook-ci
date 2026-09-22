@@ -114,9 +114,11 @@ Most are enforced by eslint; the intent:
   title, so it is the only subject that reaches `main`.
 - **Releases are automatic** via `semantic-release` on every push to `main`: it
   analyzes the conventional subjects since the last `vX.Y.Z` tag, computes the
-  next version, and creates the tag + GitHub Release. **Version mapping (v0):**
-  `feat:` → minor; `fix:` / `perf:` → patch; a breaking `!` is **capped at minor**
-  while pre-1.0. Cutting `1.0.0` is a deliberate manual act at go-live.
+  next version, and creates the tag + GitHub Release. **Version mapping** (standard
+  SemVer from the `conventionalcommits` preset): `feat:` → minor; `fix:` / `perf:`
+  → patch; a breaking `!` → major; `docs:` / `chore:` / `style:` / `refactor:` /
+  `test:` / `ci:` / `build:` do not release. The first release cut `v1.0.0`, so
+  this is a 1.x line — there is no pre-1.0 cap.
 
 ## Agent directive files
 
