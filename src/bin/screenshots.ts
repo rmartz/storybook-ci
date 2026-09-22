@@ -16,9 +16,19 @@
  *                         learns the gallery is configured but can't post; when it
  *                         is valid it clears any prior advisory.
  *
+ *   screenshots capture-base
+ *                         Screenshot the same stories from a build of the PR's
+ *                         BASE commit and stash them (PNGs + a manifest) in the
+ *                         shared output dir for `capture` to pair against. Runs
+ *                         only when `capture-base` is enabled, and is best-effort
+ *                         by construction: every failure path exits 0, so a base
+ *                         render that cannot be produced costs the PR nothing but
+ *                         its Before column.
+ *
  *   screenshots capture   Read the built `index.json`, resolve the changed
  *                         stories, screenshot them, and post/update the PR
- *                         gallery comment via `gh --attach`.
+ *                         gallery comment via `gh --attach`. When a base render
+ *                         is present the gallery shows Before/After side by side.
  *
  * All configuration arrives as environment variables (set by the workflow from
  * its inputs), so nothing here is project-specific.
@@ -32,8 +42,11 @@ import { captureStories } from '../capture.js';
 import { postScreenshotComment } from '../comment.js';
 import { findFiles } from '../lib/find-files.js';
 import { resolveStories } from '../resolve-stories.js';
+import { readBaseRender, writeBaseManifest, writeRenders } from '../renders.js';
 import { normalizeImportPath, readStoryEntries, storyFilesFromEntries } from '../story-index.js';
 import type { AdvisoryOptions, PatStatus } from '../advisory.js';
+import type { CaptureOptions, CaptureOutcome } from '../capture.js';
+import type { BaseRenderStatus } from '../gallery.js';
 import type { ResolveInput, ScreenshotResolver, StoryIndexEntry } from '../types.js';
 
 const ADVISORY_MARKER = '<!-- storybook-screenshots-advisory -->';
@@ -124,32 +137,96 @@ function runPreflight(): void {
   if (output) appendFileSync(output, `pat_status=${status}\n`);
 }
 
-async function runCapture(): Promise<void> {
-  const staticDir = env('STATIC_DIR', 'storybook-static');
-  const changedFiles = splitList(env('CHANGED_FILES'));
+function outputDirectory(): string {
+  const dir = env('OUTPUT_DIR', join(process.cwd(), 'storybook-screenshots-out'));
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function captureOptions(staticDir: string): CaptureOptions {
+  return {
+    staticDir,
+    port: Number(env('STORYBOOK_PORT', '6006')),
+    viewport: parseViewport(env('VIEWPORT', '1280x720')),
+    // Each render gets the full deadline; the job timeout covers both (see the
+    // base-timeout-minutes input) so the capture still FAILS rather than cancels.
+    deadlineMs: Number(env('CAPTURE_DEADLINE_MS', '240000')),
+  };
+}
+
+/** Resolve the stories a render should screenshot from its own built index. */
+function selectStories(staticDir: string, changedFiles: string[]): StoryIndexEntry[] {
   const entries = readStoryEntries(join(staticDir, 'index.json'));
   const storyFiles = storyFilesFromEntries(entries);
   const result = resolveStories({ ...resolverInput(changedFiles, storyFiles), storyFiles });
   console.log(result.reason);
+  return selectEntries(entries, result.captureAll, new Set(result.storyFiles));
+}
 
-  const selected = selectEntries(entries, result.captureAll, new Set(result.storyFiles));
+function isComplete(outcome: CaptureOutcome): boolean {
+  return outcome.failed === 0 && !outcome.deadlineHit;
+}
+
+/**
+ * Render the PR base. Best-effort: this never exits non-zero and never throws,
+ * because the head screenshots are the thing that must survive — a base render
+ * that fails degrades the comment to After-only and nothing more.
+ *
+ * The changed-file list here is the BASE side of the diff, so a renamed story
+ * arrives under its pre-rename path (the base `index.json` knows no other) and
+ * keeps its Before.
+ */
+async function runCaptureBase(): Promise<void> {
+  const outputDir = outputDirectory();
+  try {
+    const staticDir = env('BASE_STATIC_DIR', env('STATIC_DIR', 'storybook-static'));
+    const selected = selectStories(staticDir, splitList(env('BASE_CHANGED_FILES')));
+    if (selected.length === 0) {
+      console.log('Base render: no matching stories — every captured story is new in this PR.');
+      writeBaseManifest({ complete: true, entries: [] }, outputDir);
+      return;
+    }
+
+    console.log(`Base render: capturing ${selected.length} stor${plural(selected.length)}.`);
+    const outcome = await captureStories(selected, captureOptions(staticDir));
+    writeBaseManifest(
+      {
+        complete: isComplete(outcome),
+        entries: writeRenders(outcome.captured, outputDir, 'before'),
+      },
+      outputDir,
+    );
+    if (!isComplete(outcome)) {
+      console.error(
+        `Base render incomplete (${outcome.failed} failed, deadline ${outcome.deadlineHit ? 'hit' : 'not hit'}) — those stories post without a Before.`,
+      );
+    }
+  } catch (error) {
+    // No manifest written: the head capture reads this as "unavailable" and posts
+    // the After-only gallery with a note.
+    console.error(`Base render skipped: ${errorMessage(error)}`);
+  }
+}
+
+async function runCapture(): Promise<void> {
+  const staticDir = env('STATIC_DIR', 'storybook-static');
+  const selected = selectStories(staticDir, splitList(env('CHANGED_FILES')));
   if (selected.length === 0) {
     console.log('No matching stories to capture — skipping.');
     return;
   }
-  console.log(`Capturing ${selected.length} stor${selected.length === 1 ? 'y' : 'ies'}.`);
+  console.log(`Capturing ${selected.length} stor${plural(selected.length)}.`);
 
-  const outputDir = env('OUTPUT_DIR', join(process.cwd(), 'storybook-screenshots-out'));
-  mkdirSync(outputDir, { recursive: true });
+  const outputDir = outputDirectory();
+  const outcome = await captureStories(selected, captureOptions(staticDir));
+  const base = readBaseRender(outputDir);
+  const baseStatus: BaseRenderStatus =
+    env('CAPTURE_BASE') !== 'true' ? 'none' : base.available ? 'ok' : 'unavailable';
+  if (baseStatus === 'unavailable') {
+    console.error('Base render unavailable — posting the PR render only.');
+  }
 
-  const outcome = await captureStories(selected, {
-    staticDir,
-    port: Number(env('STORYBOOK_PORT', '6006')),
-    viewport: parseViewport(env('VIEWPORT', '1280x720')),
-    deadlineMs: Number(env('CAPTURE_DEADLINE_MS', '240000')),
-  });
-
-  if (outcome.captured.length > 0) {
+  if (outcome.captured.length > 0 || base.entries.length > 0) {
     try {
       postScreenshotComment(outcome.captured, {
         repo: env('REPO'),
@@ -157,12 +234,16 @@ async function runCapture(): Promise<void> {
         headSha: env('PR_HEAD_SHA'),
         outputDir,
         marker: env('COMMENT_MARKER', '<!-- storybook-screenshots-bot -->'),
+        before: base.entries,
+        baseStatus,
+        baseComplete: base.complete,
+        headComplete: isComplete(outcome),
       });
       console.log(`Published ${outcome.captured.length} screenshot(s).`);
     } catch (error) {
       // The PAT authenticated in preflight but the user-attachments upload was
       // still rejected (e.g. missing scope). Alert the reviewer, non-blocking.
-      console.error(`Screenshot upload failed: ${error instanceof Error ? error.message : error}`);
+      console.error(`Screenshot upload failed: ${errorMessage(error)}`);
       postAdvisory('invalid', advisoryOptions());
       process.exit(1);
     }
@@ -171,12 +252,20 @@ async function runCapture(): Promise<void> {
   }
 
   // Fail (fix-review), do not run to timeout (cancellation): see capture.ts.
-  if (outcome.deadlineHit || outcome.failed > 0) {
+  if (!isComplete(outcome)) {
     console.error(
       `Screenshot capture incomplete: ${outcome.failed} failed, deadline ${outcome.deadlineHit ? 'hit' : 'not hit'}.`,
     );
     process.exit(1);
   }
+}
+
+function plural(count: number): string {
+  return count === 1 ? 'y' : 'ies';
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function selectEntries(
@@ -193,9 +282,13 @@ if (mode === 'gate') {
   runGate();
 } else if (mode === 'preflight') {
   runPreflight();
+} else if (mode === 'capture-base') {
+  await runCaptureBase();
 } else if (mode === 'capture') {
   await runCapture();
 } else {
-  console.error(`Unknown mode "${mode ?? ''}" — expected "gate", "preflight", or "capture".`);
+  console.error(
+    `Unknown mode "${mode ?? ''}" — expected "gate", "preflight", "capture-base", or "capture".`,
+  );
   process.exit(2);
 }

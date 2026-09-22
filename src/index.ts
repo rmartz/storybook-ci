@@ -6,6 +6,22 @@
 export { resolveStories } from './resolve-stories.js';
 export { captureStories } from './capture.js';
 export { postScreenshotComment } from './comment.js';
+export { buildGalleryBody, pairRenders, renderedStory } from './gallery.js';
+export type {
+  BaseRenderStatus,
+  GalleryBodyOptions,
+  GalleryRow,
+  GallerySide,
+  RenderedStory,
+} from './gallery.js';
+export {
+  BASE_MANIFEST_FILE,
+  parseBaseManifest,
+  readBaseRender,
+  writeBaseManifest,
+  writeRenders,
+} from './renders.js';
+export type { BaseManifest, BaseRender } from './renders.js';
 export { buildAdvisoryBody, postAdvisory, clearAdvisory } from './advisory.js';
 export type { PatStatus, AdvisoryOptions } from './advisory.js';
 export { readStoryEntries, storyFilesFromEntries, normalizeImportPath } from './story-index.js';
