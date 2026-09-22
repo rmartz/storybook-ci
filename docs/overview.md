@@ -18,7 +18,8 @@ concerns behind two reusable workflows a consuming repo pins by SHA:
    optional gating `build-storybook`.
 3. **Per-PR screenshot galleries** — screenshot the stories a PR's changes touch
    and post them as one update-in-place PR comment whose images are GitHub
-   **user-attachments** uploaded by `gh --attach`.
+   **user-attachments** uploaded by `gh --attach`. Opt into `capture-base` and
+   the same comment renders the PR base too, Before and After side by side.
 
 The goal is that a repo adopts all three with a handful of caller lines, and the
 subtle operational reasoning — concurrency, fail-vs-cancel, deadlines, fork
@@ -53,6 +54,23 @@ story. That is deliberate: a job that hits `timeout-minutes` is _cancelled_ (whi
 the PR coordinator escalates to a human), whereas a non-zero exit is a _failure_
 (auto-routed to fix-review, where an agent can fix a slow or broken story). The
 job's `continue-on-error` keeps that failure non-blocking for the merge.
+
+## Best-effort Before render (screenshots)
+
+`capture-base` adds a second render — the PR's base, built in a detached worktree
+at the merge base — so the gallery can pair each story's old and new rendering.
+It is deliberately best-effort and the asymmetry of the two sides is expected,
+not an error:
+
+- Every step of the base path is isolated: a base branch that will not install or
+  build costs the PR its Before column and nothing else. The head screenshots are
+  captured and posted regardless, with a note explaining the gap.
+- A story added in the PR has no Before; one deleted has no After. The base-side
+  file list is taken from `git diff --name-status`, whose second field is the
+  **pre-rename** path, so a renamed story still finds itself in the base
+  `index.json` instead of silently losing its Before.
+- Two renders need roughly twice the budget, so the job timeout switches to
+  `base-timeout-minutes` — see [configuration.md](configuration.md).
 
 ## This repo is CI-only and unpublished
 

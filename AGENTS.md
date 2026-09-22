@@ -32,12 +32,21 @@ compatibility surface: renaming or removing one is a breaking change for every
 consumer. Add inputs with safe defaults rather than repurposing existing ones.
 Full reference: [docs/configuration.md](docs/configuration.md).
 
-## Three operational invariants that must not regress
+## Four operational invariants that must not regress
 
 - **Fail, don't cancel (screenshots).** The capture script enforces its own
   `capture-deadline-ms`, kept below the job `timeout-minutes`, and exits non-zero
   on the deadline or a broken story — a _failure_ routed to fix-review, not a
-  _cancellation_ escalated to a human. Keep the deadline below the timeout.
+  _cancellation_ escalated to a human. Keep the deadline below the timeout — and
+  below **half** of it when `capture-base` runs both renders on one job
+  (`base-timeout-minutes` carries that larger budget so an untouched
+  `timeout-minutes` keeps its meaning).
+- **The Before render never costs the After one.** Every step of the
+  `capture-base` path is `continue-on-error` and gated on its predecessor, and
+  `screenshots capture-base` itself never throws or exits non-zero. A base render
+  that cannot be produced writes no manifest, which the gallery reads as
+  "unavailable" and degrades to After-only. The head screenshots must survive
+  anything the base side does.
 - **Fork safety.** The screenshots job is skipped on fork PRs; the
   `STORYBOOK_SCREENSHOT_PAT` must never reach fork-authored code. See [docs/authentication.md](docs/authentication.md).
 - **Build the capture bundle outside the consumer's workspace.** The screenshots

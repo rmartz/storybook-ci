@@ -40,6 +40,7 @@ import { join } from 'node:path';
 import { clearAdvisory, postAdvisory } from '../advisory.js';
 import { captureStories } from '../capture.js';
 import { postScreenshotComment } from '../comment.js';
+import { errorMessage } from '../lib/error-message.js';
 import { findFiles } from '../lib/find-files.js';
 import { resolveStories } from '../resolve-stories.js';
 import { readBaseRender, writeBaseManifest, writeRenders } from '../renders.js';
@@ -210,45 +211,49 @@ async function runCaptureBase(): Promise<void> {
 
 async function runCapture(): Promise<void> {
   const staticDir = env('STATIC_DIR', 'storybook-static');
+  const outputDir = outputDirectory();
+  const base = readBaseRender(outputDir);
   const selected = selectStories(staticDir, splitList(env('CHANGED_FILES')));
-  if (selected.length === 0) {
+
+  // A PR that only deletes stories resolves to nothing on the head side, but its
+  // base render still has Before-only rows worth posting.
+  if (selected.length === 0 && base.entries.length === 0) {
     console.log('No matching stories to capture — skipping.');
     return;
   }
-  console.log(`Capturing ${selected.length} stor${plural(selected.length)}.`);
+  if (selected.length > 0) {
+    console.log(`Capturing ${selected.length} stor${plural(selected.length)}.`);
+  }
 
-  const outputDir = outputDirectory();
-  const outcome = await captureStories(selected, captureOptions(staticDir));
-  const base = readBaseRender(outputDir);
+  const outcome =
+    selected.length > 0
+      ? await captureStories(selected, captureOptions(staticDir))
+      : { captured: [], failed: 0, deadlineHit: false };
   const baseStatus: BaseRenderStatus =
     env('CAPTURE_BASE') !== 'true' ? 'none' : base.available ? 'ok' : 'unavailable';
   if (baseStatus === 'unavailable') {
     console.error('Base render unavailable — posting the PR render only.');
   }
 
-  if (outcome.captured.length > 0 || base.entries.length > 0) {
-    try {
-      postScreenshotComment(outcome.captured, {
-        repo: env('REPO'),
-        prNumber: env('PR_NUMBER'),
-        headSha: env('PR_HEAD_SHA'),
-        outputDir,
-        marker: env('COMMENT_MARKER', '<!-- storybook-screenshots-bot -->'),
-        before: base.entries,
-        baseStatus,
-        baseComplete: base.complete,
-        headComplete: isComplete(outcome),
-      });
-      console.log(`Published ${outcome.captured.length} screenshot(s).`);
-    } catch (error) {
-      // The PAT authenticated in preflight but the user-attachments upload was
-      // still rejected (e.g. missing scope). Alert the reviewer, non-blocking.
-      console.error(`Screenshot upload failed: ${errorMessage(error)}`);
-      postAdvisory('invalid', advisoryOptions());
-      process.exit(1);
-    }
-  } else {
-    console.log('No screenshots captured.');
+  try {
+    postScreenshotComment(outcome.captured, {
+      repo: env('REPO'),
+      prNumber: env('PR_NUMBER'),
+      headSha: env('PR_HEAD_SHA'),
+      outputDir,
+      marker: env('COMMENT_MARKER', '<!-- storybook-screenshots-bot -->'),
+      before: base.entries,
+      baseStatus,
+      baseComplete: base.complete,
+      headComplete: isComplete(outcome),
+    });
+    console.log(`Published ${outcome.captured.length} screenshot(s).`);
+  } catch (error) {
+    // The PAT authenticated in preflight but the user-attachments upload was
+    // still rejected (e.g. missing scope). Alert the reviewer, non-blocking.
+    console.error(`Screenshot upload failed: ${errorMessage(error)}`);
+    postAdvisory('invalid', advisoryOptions());
+    process.exit(1);
   }
 
   // Fail (fix-review), do not run to timeout (cancellation): see capture.ts.
@@ -262,10 +267,6 @@ async function runCapture(): Promise<void> {
 
 function plural(count: number): string {
   return count === 1 ? 'y' : 'ies';
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function selectEntries(

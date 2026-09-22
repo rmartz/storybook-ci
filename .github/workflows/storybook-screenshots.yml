@@ -65,8 +65,17 @@ on:
         type: string
         required: false
         default: chromium
+      capture-base:
+        description: >-
+          Also render the PR base and post the gallery as Before/After. Roughly
+          doubles the job (a second install + Storybook build + capture), so it
+          is opt-in; base-timeout-minutes covers the extra budget. Best-effort —
+          a base render that fails degrades the comment to After-only.
+        type: boolean
+        required: false
+        default: false
       capture-deadline-ms:
-        description: 'Fail-not-cancel budget (keep below timeout-minutes).'
+        description: 'Per-render fail-not-cancel budget (both renders get it; keep 2x below the job timeout when capture-base is on).'
         type: string
         required: false
         default: '240000'
@@ -75,6 +84,14 @@ on:
         type: number
         required: false
         default: 8
+      base-timeout-minutes:
+        description: >-
+          Backstop job timeout used INSTEAD of timeout-minutes when capture-base
+          is on, so enabling Before/After does not silently change the budget of
+          a consumer that left it alone. Must exceed twice capture-deadline-ms.
+        type: number
+        required: false
+        default: 14
       comment-marker:
         type: string
         required: false
@@ -108,7 +125,11 @@ jobs:
     # block a merge, so continue-on-error keeps the run green regardless while the
     # job itself still shows red (routed to fix-review). See capture.ts.
     continue-on-error: true
-    timeout-minutes: ${{ inputs.timeout-minutes }}
+    # Two renders need roughly twice the budget, so capture-base swaps in its own
+    # timeout. Both must stay above the capture deadlines: a job that hits
+    # timeout-minutes is CANCELLED (escalated to a human) where a blown capture
+    # deadline is a FAILURE (auto-routed to fix-review). See capture.ts.
+    timeout-minutes: ${{ inputs.capture-base && inputs.base-timeout-minutes || inputs.timeout-minutes }}
     # Forked PRs receive a read-only token and (rightly) no PAT, so skip them —
     # the PAT must NEVER be exposed to fork-authored code.
     if: github.event.pull_request.head.repo.full_name == github.repository
@@ -130,9 +151,21 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --quiet origin "$BASE_REF"
-          changed=$(git diff --name-only --diff-filter=ACMR "origin/$BASE_REF...HEAD")
+          # Pin the merge base once: the head diff, the base-side diff and the base
+          # render must all be relative to the same commit, or the Before column
+          # shows a state the diff was never computed against.
+          base_sha=$(git merge-base "origin/$BASE_REF" HEAD)
+          changed=$(git diff --name-only --diff-filter=ACMR "$base_sha" HEAD)
+          # Base-side paths, for the Before render. `--name-status` puts the
+          # PRE-rename path in field 2 on an R line and the path itself on every
+          # other status, so one awk field yields exactly the names the base
+          # `index.json` knows — without it a renamed story silently loses its
+          # Before. D is included so a story deleted in the PR still gets a row.
+          base_changed=$(git diff --name-status --diff-filter=ACMRD "$base_sha" HEAD | awk '{print $2}')
           echo "Changed files:"; echo "$changed"
           printf 'files<<EOF\n%s\nEOF\n' "$changed" >> "$GITHUB_OUTPUT"
+          printf 'base_files<<EOF\n%s\nEOF\n' "$base_changed" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -229,6 +262,50 @@ jobs:
         if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok'
         run: ${{ inputs.build-command }}
 
+      # --- Before render (capture-base) ----------------------------------------
+      # Best-effort by construction: every step below is continue-on-error and
+      # each gates on its predecessor's outcome, so a base branch that will not
+      # install or build costs the PR its Before column and nothing else — the
+      # head screenshots are captured and posted regardless. The capture step
+      # writes no manifest when it fails, which the gallery reads as "base render
+      # unavailable" and notes in the comment.
+      #
+      # The install/build pair repeats the consumer steps above rather than
+      # sharing them: a reusable workflow's `uses: ./…` resolves against the
+      # CALLER's checkout, so this repo cannot factor its own steps out into a
+      # local composite action (see AGENTS.md).
+      - name: Create the base worktree
+        id: base-worktree
+        if: ${{ inputs.capture-base && steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok' }}
+        continue-on-error: true
+        env:
+          BASE_SHA: ${{ steps.changes.outputs.base_sha }}
+        # Outside GITHUB_WORKSPACE so the base tree never shadows the head one.
+        run: git worktree add --detach "$RUNNER_TEMP/sb-base" "$BASE_SHA"
+
+      - name: Install base dependencies
+        id: base-install
+        if: ${{ inputs.capture-base && steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok' && steps.base-worktree.outcome == 'success' }}
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}/sb-base
+        env:
+          PM: ${{ inputs.package-manager }}
+        run: |
+          set -euo pipefail
+          case "$PM" in
+            pnpm) pnpm install --frozen-lockfile ;;
+            npm) npm ci ;;
+            yarn) yarn install --frozen-lockfile ;;
+            *) echo "Unsupported package-manager: $PM" >&2; exit 1 ;;
+          esac
+
+      - name: Build base Storybook
+        id: base-build
+        if: ${{ inputs.capture-base && steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok' && steps.base-install.outcome == 'success' }}
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}/sb-base
+        run: ${{ inputs.build-command }}
+
       - name: Cache Playwright browsers
         if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok'
         id: playwright-cache
@@ -271,6 +348,25 @@ jobs:
           sudo mv "$tmp/gh_${GH_VERSION}_linux_amd64/bin/gh" /usr/local/bin/gh
           gh --version
 
+      # Screenshots the SAME stories from the base build, into the shared output
+      # dir the head capture posts from. CHANGED_FILES here is the base side of
+      # the diff, so a renamed story arrives under its pre-rename path — the only
+      # path the base `index.json` knows.
+      - name: Capture the base render
+        if: ${{ inputs.capture-base && steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok' && steps.base-build.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          BASE_CHANGED_FILES: ${{ steps.changes.outputs.base_files }}
+          BASE_STATIC_DIR: ${{ runner.temp }}/sb-base/${{ inputs.static-dir }}
+          STORY_GLOBS: ${{ inputs.story-globs }}
+          COMPONENT_GLOBS: ${{ inputs.component-globs }}
+          STORYBOOK_CONFIG_GLOBS: ${{ inputs.storybook-config-globs }}
+          RESOLVER: ${{ inputs.screenshot-resolver }}
+          VIEWPORT: ${{ inputs.viewport }}
+          CAPTURE_DEADLINE_MS: ${{ inputs.capture-deadline-ms }}
+          OUTPUT_DIR: ${{ runner.temp }}/storybook-screenshots-out
+        run: node "$RUNNER_TEMP/storybook-ci/dist/bin/screenshots.js" capture-base
+
       - name: Capture screenshots and post PR comment
         # Only reached when the PAT preflight passed, so the token is present and
         # authenticates. gh authenticates with STORYBOOK_SCREENSHOT_PAT — the
@@ -285,6 +381,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           CHANGED_FILES: ${{ steps.changes.outputs.files }}
+          CAPTURE_BASE: ${{ inputs.capture-base }}
           STATIC_DIR: ${{ github.workspace }}/${{ inputs.static-dir }}
           STORY_GLOBS: ${{ inputs.story-globs }}
           COMPONENT_GLOBS: ${{ inputs.component-globs }}

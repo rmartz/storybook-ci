@@ -70,6 +70,27 @@ gate short-circuits everything after it — including the PAT check — so the j
 goes green **without having exercised the token at all**. See
 [authentication.md](authentication.md#verifying-your-setup--a-green-job-is-not-proof).
 
+### Before/After (optional)
+
+Add `capture-base: true` to render the PR base alongside its head, so the gallery
+shows each story's old and new rendering side by side:
+
+```yaml
+jobs:
+  screenshots:
+    uses: rmartz/storybook-ci/.github/workflows/storybook-screenshots.yml@<sha> # vX.Y.Z
+    secrets: inherit
+    with:
+      capture-base: true
+```
+
+This roughly doubles the job (a second install, Storybook build, and capture),
+which is why it is off by default; the job timeout switches to
+`base-timeout-minutes` when it is on, so a consumer that leaves it alone keeps
+exactly the budget it had. The base render is best-effort — if it fails, the
+comment degrades to After-only and says so. See
+[configuration.md](configuration.md#capture-base--the-beforeafter-gallery).
+
 ## What adoption removes
 
 A repo migrating off a bespoke implementation deletes:

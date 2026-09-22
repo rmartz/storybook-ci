@@ -25,6 +25,7 @@ export type { BaseManifest, BaseRender } from './renders.js';
 export { buildAdvisoryBody, postAdvisory, clearAdvisory } from './advisory.js';
 export type { PatStatus, AdvisoryOptions } from './advisory.js';
 export { readStoryEntries, storyFilesFromEntries, normalizeImportPath } from './story-index.js';
+export { errorMessage } from './lib/error-message.js';
 export { findFiles } from './lib/find-files.js';
 export { resolveStaticPath } from './lib/static-path.js';
 export { SCREENSHOT_RESOLVERS } from './types.js';
