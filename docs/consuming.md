@@ -47,12 +47,17 @@ on:
       - 'src/**'
       - '.storybook/**'
 permissions:
+  contents: read
   pull-requests: write
 jobs:
   screenshots:
     uses: rmartz/storybook-ci/.github/workflows/storybook-screenshots.yml@<sha> # vX.Y.Z
     secrets: inherit # provides STORYBOOK_SCREENSHOT_PAT (classic PAT)
 ```
+
+Both scopes are required: a caller's `permissions:` block is exhaustive — every
+scope it omits becomes `none` — and the reusable workflow checks out the consumer
+repo, so omitting `contents: read` fails the run at checkout.
 
 The screenshots caller needs **no** `concurrency` or `continue-on-error` block —
 per-PR concurrency and the advisory isolation are centralized in the reusable

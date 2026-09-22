@@ -27,10 +27,10 @@ copies.
 
 ## The two reusable workflows
 
-| Workflow                                                                      | Gating?      | Trigger permissions    | Secrets                            | What it does                                                                                                              |
-| ----------------------------------------------------------------------------- | ------------ | ---------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| [`storybook-tests.yml`](../.github/workflows/storybook-tests.yml)             | **gating**   | `contents: read`       | none                               | Runs the browser test project and (optionally) the gating `build-storybook`. Change-gated by a `detect-changes` denylist. |
-| [`storybook-screenshots.yml`](../.github/workflows/storybook-screenshots.yml) | **advisory** | `pull-requests: write` | classic PAT via `secrets: inherit` | Builds Storybook, screenshots the resolved-changed stories, posts the gallery via `gh --attach`.                          |
+| Workflow                                                                      | Gating?      | Trigger permissions                       | Secrets                            | What it does                                                                                                              |
+| ----------------------------------------------------------------------------- | ------------ | ----------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| [`storybook-tests.yml`](../.github/workflows/storybook-tests.yml)             | **gating**   | `contents: read`                          | none                               | Runs the browser test project and (optionally) the gating `build-storybook`. Change-gated by a `detect-changes` denylist. |
+| [`storybook-screenshots.yml`](../.github/workflows/storybook-screenshots.yml) | **advisory** | `contents: read` + `pull-requests: write` | classic PAT via `secrets: inherit` | Builds Storybook, screenshots the resolved-changed stories, posts the gallery via `gh --attach`.                          |
 
 A consuming repo may adopt either or both. See [consuming.md](consuming.md).
 
