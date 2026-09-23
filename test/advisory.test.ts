@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildAdvisoryBody, isRateLimitError } from '../src/advisory.js';
+import { buildAdvisoryBody, classifyGhFailure } from '../src/advisory.js';
 
 const MARKER = '<!-- storybook-screenshots-advisory -->';
 const DOCS = 'https://example.test/authentication.md';
@@ -33,19 +33,33 @@ describe('buildAdvisoryBody', () => {
   });
 });
 
-describe('isRateLimitError', () => {
-  it('recognizes the GraphQL and REST rate-limit messages', () => {
-    expect(isRateLimitError('GraphQL: API rate limit already exceeded for user ID 1032849.')).toBe(
-      true,
+describe('classifyGhFailure', () => {
+  it('recognizes GraphQL, REST, and secondary rate limits', () => {
+    expect(classifyGhFailure('GraphQL: API rate limit already exceeded for user ID 1032849.')).toBe(
+      'rate-limited',
     );
-    expect(isRateLimitError('HTTP 403: API rate limit exceeded for user ID 1.')).toBe(true);
-    expect(isRateLimitError('HTTP 403: You have exceeded a secondary rate limit.')).toBe(true);
+    expect(classifyGhFailure('HTTP 403: API rate limit exceeded for user ID 1.')).toBe(
+      'rate-limited',
+    );
+    expect(classifyGhFailure('HTTP 403: You have exceeded a secondary rate limit.')).toBe(
+      'rate-limited',
+    );
   });
 
-  it('does not mistake an auth failure for a rate limit', () => {
-    expect(isRateLimitError('HTTP 401: Bad credentials (https://api.github.com/user)')).toBe(false);
-    expect(isRateLimitError('HTTP 403: Resource not accessible by personal access token')).toBe(
-      false,
+  it('treats bad credentials and missing permissions as a rejected token', () => {
+    expect(classifyGhFailure('HTTP 401: Bad credentials (https://api.github.com/user)')).toBe(
+      'rejected',
     );
+    expect(classifyGhFailure('HTTP 403: Resource not accessible by personal access token')).toBe(
+      'rejected',
+    );
+  });
+
+  it('treats anything else as GitHub failing, not the token', () => {
+    expect(classifyGhFailure('HTTP 502: Bad Gateway')).toBe('github-error');
+    expect(classifyGhFailure('GraphQL: Something went wrong while executing your query.')).toBe(
+      'github-error',
+    );
+    expect(classifyGhFailure('error connecting to api.github.com')).toBe('github-error');
   });
 });

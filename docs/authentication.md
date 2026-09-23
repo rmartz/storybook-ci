@@ -118,34 +118,45 @@ for one, so there is nothing to count down. That is the main practical reason to
 set an expiration: a no-expiry token trades a scheduled, announced rotation for an
 unannounced failure whenever it is eventually revoked.
 
-## Missing, invalid, or rate-limited PAT — advisory, never red
+## Missing or invalid PAT — advisory, never red
 
-A same-repo PR whose PAT cannot post the gallery never fails the merge **and never
-turns the screenshots job red**. A PAT problem is configuration, not code, so a red
+A same-repo PR whose PAT is **misconfigured** never fails the merge **and never
+turns the screenshots job red**. Misconfiguration is not a code problem, so a red
 job (routed to fix-review) would only send an agent after something it cannot fix.
 Before the expensive Storybook build, a **preflight** step checks the PAT:
 
-- **missing** (secret not set), **invalid** (set but fails to authenticate), or
-  **rate-limited** (valid, but its account has exhausted its GitHub API quota) → the
-  job posts a single, update-in-place **advisory PR comment** naming the reason,
-  adds a `::warning::` annotation to the run, skips the build and capture, and
-  **succeeds**. The comment is posted with the Actions `GITHUB_TOKEN` (which can post
-  a normal comment even though it cannot do `--attach`), tagged with its own marker
-  (`<!-- storybook-screenshots-advisory -->`) so a reviewer sees exactly one notice.
+- **missing** (secret not set) or **invalid** (rejected: bad credentials, or a
+  missing scope/permission) → the job posts a single, update-in-place **advisory
+  PR comment** naming the reason, adds a `::warning::` annotation to the run, skips
+  the build and capture, and **succeeds**. The comment is posted with the Actions
+  `GITHUB_TOKEN` (which can post a normal comment even though it cannot do
+  `--attach`), tagged with its own marker (`<!-- storybook-screenshots-advisory -->`)
+  so a reviewer sees exactly one notice.
 - **valid** → any prior advisory comment is deleted and the gallery is captured and
   posted as usual.
 
 If the PAT authenticates in preflight but the user-attachments upload is still
-rejected — a token lacking the needed scope, or the account's rate limit running
-out mid-job (the `--attach` upload is GraphQL-heavy) — the capture step posts the
-same advisory with the matching reason, annotates the run, and exits **zero**. A
-rate-limited advisory says the token is fine and to re-run once the limit resets, so
-nobody rotates a working PAT.
+rejected for a token reason (e.g. a missing scope), the capture step posts the same
+`invalid` advisory, annotates the run, and exits **zero**.
 
-The job still fails for code problems: a story that will not render or a blown
-`capture-deadline-ms` (see [Fail, don't cancel](overview.md#fail-dont-cancel-screenshots)).
-So the states are: valid → gallery; missing/invalid/rate-limited → advisory comment
-and a green job with a warning; and in every case the merge is never blocked.
+## GitHub failures — still red
+
+A failure on GitHub's side is **not** misconfiguration, and still fails the job
+(non-blocking for the merge, since the job is `continue-on-error`), like any other
+flaky dependency:
+
+- **Rate limit** — the PAT's account has exhausted its API quota (the `--attach`
+  upload is GraphQL-heavy, so this can happen mid-job). The job also posts a
+  rate-limited advisory saying the token is fine and to re-run once the limit
+  resets, so nobody rotates a working PAT.
+- **Anything else** — a 5xx, a GraphQL error, a network failure. No advisory; the
+  error is in the job log.
+
+The failure is classified from `gh`'s stderr: a rate-limit message first (GitHub
+reports it as a 403 too), then any other 401/403 as a rejected token, and everything
+else as GitHub failing. So the states are: valid → gallery; missing/invalid →
+advisory and a green job with a warning; GitHub failure → red job; and in every case
+the merge is never blocked.
 
 ## Fork safety
 

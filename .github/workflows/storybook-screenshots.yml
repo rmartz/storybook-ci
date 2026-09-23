@@ -229,11 +229,13 @@ jobs:
           RESOLVER: ${{ inputs.screenshot-resolver }}
         run: node "$RUNNER_TEMP/storybook-ci/dist/bin/screenshots.js" gate
 
-      # PAT preflight, before the expensive build. When the PAT is missing,
-      # invalid or rate-limited this posts a non-blocking advisory PR comment (via the Actions
-      # token, which can post a normal comment even though it can't do --attach) so
-      # a reviewer learns the gallery is configured but can't post — and the build
-      # is skipped. When the PAT is valid it clears any prior advisory. Uses the
+      # PAT preflight, before the expensive build. When the PAT is missing or
+      # invalid (misconfiguration) this posts a non-blocking advisory PR comment
+      # (via the Actions token, which can post a normal comment even though it
+      # can't do --attach) so a reviewer learns the gallery is configured but
+      # can't post, the build is skipped, and the job stays green. A rate limit or
+      # other GitHub failure fails this step instead. When the PAT is valid it
+      # clears any prior advisory. Uses the
       # preinstalled gh (plain `gh api`, no --attach), so it runs before the gh
       # 2.99 install below.
       - name: Verify screenshot PAT
@@ -391,8 +393,9 @@ jobs:
         # authenticates. gh authenticates with STORYBOOK_SCREENSHOT_PAT — the
         # user-attachments upload endpoint rejects the Actions GITHUB_TOKEN (an
         # installation token). ACTIONS_TOKEN is passed only so an upload failure can
-        # post the advisory comment — such a failure (bad scope, rate limit) is a
-        # warning, not a red job: no code change fixes it. See docs/authentication.md.
+        # post the advisory comment. A rejected token (e.g. bad scope) is a warning,
+        # not a red job; a rate limit or other GitHub failure still fails it.
+        # See docs/authentication.md.
         if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok'
         env:
           GH_TOKEN: ${{ secrets.STORYBOOK_SCREENSHOT_PAT }}

@@ -4,20 +4,29 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 /**
- * Whether the screenshot PAT can post the gallery. `missing` (no secret),
- * `invalid` (set but rejected) and `rate-limited` (valid, but its account has
- * exhausted its API quota) all mean the gallery cannot be posted; the screenshots
- * job then posts a non-blocking advisory comment instead.
+ * Whether the screenshot PAT can post the gallery. `missing` (no secret) and
+ * `invalid` (set but rejected) are misconfiguration: the job posts a non-blocking
+ * advisory comment and still succeeds. `rate-limited` and `unverified` (any other
+ * GitHub-side failure) are not the consumer's configuration — the job fails, as
+ * it would for any flaky dependency, and a rate limit also gets an advisory.
  */
-export type PatStatus = 'ok' | 'missing' | 'invalid' | 'rate-limited';
+export type PatStatus = 'ok' | 'missing' | 'invalid' | 'rate-limited' | 'unverified';
+
+/** The statuses that have an advisory comment. */
+export type AdvisoryReason = 'missing' | 'invalid' | 'rate-limited';
 
 /**
- * Does a failed `gh` call's message say the token's account hit its API rate
- * limit? That is a transient quota problem, not a bad token — the advisory must
- * not send a reviewer off to rotate a PAT that works. Pure, so it is unit-tested.
+ * Classify a failed `gh` call by its message (which carries gh's stderr). A rate
+ * limit is checked first: GitHub reports it as an HTTP 403 too, and it is a
+ * transient quota problem, not a bad token. Any other 401/403 — bad credentials,
+ * a missing scope or permission — is the token being rejected. Everything else
+ * (a 5xx, a GraphQL error, the network) is GitHub failing. Pure, so it is
+ * unit-tested.
  */
-export function isRateLimitError(message: string): boolean {
-  return /rate limit/i.test(message);
+export function classifyGhFailure(message: string): 'rate-limited' | 'rejected' | 'github-error' {
+  if (/rate limit/i.test(message)) return 'rate-limited';
+  if (/HTTP 40[13]|Bad credentials|Resource not accessible|scope/i.test(message)) return 'rejected';
+  return 'github-error';
 }
 
 export interface AdvisoryOptions {
@@ -35,18 +44,14 @@ export interface AdvisoryOptions {
  * PAT is missing/invalid, that this does not block the PR, and how to fix it.
  * Pure, so it is unit-tested.
  */
-export function buildAdvisoryBody(
-  status: Exclude<PatStatus, 'ok'>,
-  marker: string,
-  docsUrl: string,
-): string {
+export function buildAdvisoryBody(status: AdvisoryReason, marker: string, docsUrl: string): string {
   if (status === 'rate-limited') {
     return `${marker}
 ## 📸 Storybook Screenshots — not posted
 
 Storybook screenshots are configured for this PR, but the gallery could not be posted because the account behind \`STORYBOOK_SCREENSHOT_PAT\` has **exceeded its GitHub API rate limit**. The token itself is fine.
 
-This is **advisory only** — it does **not** block the PR. Re-run the job once the rate limit resets (within the hour). See ${docsUrl}.
+This does **not** block the PR. Re-run the job once the rate limit resets (within the hour). See ${docsUrl}.
 
 <sub>storybook-ci</sub>`;
   }
@@ -70,7 +75,7 @@ interface ExistingComment {
 }
 
 /** Post or update-in-place the advisory comment, matched by its marker. */
-export function postAdvisory(status: Exclude<PatStatus, 'ok'>, options: AdvisoryOptions): void {
+export function postAdvisory(status: AdvisoryReason, options: AdvisoryOptions): void {
   const existingId = findMarkerCommentId(options);
   const body = buildAdvisoryBody(status, options.marker, options.docsUrl);
   const dir = mkdtempSync(join(tmpdir(), 'sb-advisory-'));
