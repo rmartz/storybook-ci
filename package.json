@@ -48,7 +48,8 @@
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
     "vite": "^8.3.0",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.1",
+    "yaml": "^2.9.1"
   },
   "dependencies": {
     "picomatch": "^4.0.2",

@@ -58,6 +58,14 @@ Full reference: [docs/configuration.md](docs/configuration.md).
   never declared. Our install also uses the pnpm **our** `package.json` pins, not
   the consumer's. Keep the move, and keep the two `pnpm/action-setup` steps
   separate. See [docs/consuming.md](docs/consuming.md).
+- **Keep the consumer install authenticated.** Both workflows declare
+  `packages: read` and set `NODE_AUTH_TOKEN` on the step that installs the
+  _consumer's_ dependencies — the capture-bundle install deliberately gets
+  neither. Dropping either one breaks only consumers with a private `.npmrc` _and_
+  a cold store, so it passes CI here and fails in the fleet;
+  `test/workflow-registry-auth.test.ts` guards it. Callers must grant
+  `packages: read` too, since a called workflow can only narrow the caller's
+  permissions. See [docs/consuming.md](docs/consuming.md#private-registry-dependencies).
 
 ## Reusable-workflow gotcha: no `./`-local actions across the boundary
 
