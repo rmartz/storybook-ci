@@ -47,9 +47,10 @@ exactly two things — the attachment upload and the comment write — and neith
 touches repository contents. The `Contents: Read-only` in the original proposal
 was a guess, and the measurement disproved it.
 
-**Set an expiration.** Fine-grained PATs support one, and rotation is cheap to
-detect here: an expired token is caught by the preflight step and announces itself
-as an advisory PR comment (below) rather than failing silently.
+**Set an expiration.** Fine-grained PATs support one, and rotation is cheap here:
+the workflow warns you **before** it lapses (below), and an already-expired token
+is caught by the preflight and announces itself as an advisory PR comment rather
+than failing silently.
 
 ### A classic PAT also works, but grant far more
 
@@ -94,6 +95,28 @@ skipped  Install consumer dependencies / Build Storybook / Install gh / Capture
 That is correct behavior, but it means **a green screenshots job on a PR with no
 story-adjacent change has not exercised the PAT at all.** To validate a new token,
 use a PR that actually touches a story file or a co-located component.
+
+## Expiring PAT — a warning on the gallery
+
+Once the PAT is within `pat-expiry-warning-days` of expiry (default **14**), the
+gallery comment carries a footer naming the date:
+
+> ⚠️ The `STORYBOOK_SCREENSHOT_PAT` secret expires in **9 days** (2026-10-01).
+> Rotate it to keep this gallery posting — see docs/authentication.md.
+
+This is a **nudge, not a gate**: the token is still valid, `pat_status` stays `ok`,
+and the gallery posts exactly as usual. The warning rides on the gallery comment
+rather than a second comment of its own, so it appears where a reviewer is already
+looking and cannot accumulate.
+
+The date comes from the `github-authentication-token-expiration` response header,
+which GitHub returns on the request the preflight already makes — no extra API
+call and no extra permission.
+
+**A token created with no expiration date never warns.** GitHub sends no header
+for one, so there is nothing to count down. That is the main practical reason to
+set an expiration: a no-expiry token trades a scheduled, announced rotation for an
+unannounced failure whenever it is eventually revoked.
 
 ## Missing or invalid PAT — advisory, never blocking
 

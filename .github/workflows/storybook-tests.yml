@@ -56,8 +56,13 @@ on:
         required: false
         default: denylist
 
+# `packages: read` lets the job's GITHUB_TOKEN resolve same-owner GitHub Packages
+# for a consumer whose .npmrc scopes one. A called workflow can only narrow the
+# caller's grant, never widen it — so the caller must list `packages: read` too;
+# declaring it here keeps us from stripping a grant the caller did make.
 permissions:
   contents: read
+  packages: read
 
 jobs:
   detect-changes:
@@ -124,6 +129,9 @@ jobs:
         shell: bash
         env:
           PM: ${{ inputs.package-manager }}
+          # What a consumer's .npmrc interpolates to reach a scoped registry.
+          # Inert when they have no .npmrc — nothing reads it.
+          NODE_AUTH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           case "$PM" in
@@ -187,6 +195,9 @@ jobs:
         shell: bash
         env:
           PM: ${{ inputs.package-manager }}
+          # What a consumer's .npmrc interpolates to reach a scoped registry.
+          # Inert when they have no .npmrc — nothing reads it.
+          NODE_AUTH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           case "$PM" in
