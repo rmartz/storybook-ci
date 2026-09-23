@@ -60,8 +60,9 @@ This one is a single job, so a composite Action would work. There is a real win 
 offer, and it is worth naming honestly:
 
 > `$GITHUB_ACTION_PATH` already sits outside `GITHUB_WORKSPACE`, so the whole
-> `_storybook-ci` checkout-then-move dance — the third invariant in
-> [AGENTS.md](../AGENTS.md), and the subject of
+> `_storybook-ci` checkout-then-move dance — the "build the capture bundle
+> outside the consumer's workspace" invariant in [AGENTS.md](../AGENTS.md), and
+> the subject of
 > [#14](https://github.com/rmartz/storybook-ci/pull/14) — would simply disappear.
 
 Against that, every one of the following moves out of here and into **each
