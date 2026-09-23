@@ -32,7 +32,7 @@ compatibility surface: renaming or removing one is a breaking change for every
 consumer. Add inputs with safe defaults rather than repurposing existing ones.
 Full reference: [docs/configuration.md](docs/configuration.md).
 
-## Three operational invariants that must not regress
+## Four operational invariants that must not regress
 
 - **Fail, don't cancel (screenshots).** The capture script enforces its own
   `capture-deadline-ms`, kept below the job `timeout-minutes`, and exits non-zero
@@ -49,6 +49,14 @@ Full reference: [docs/configuration.md](docs/configuration.md).
   never declared. Our install also uses the pnpm **our** `package.json` pins, not
   the consumer's. Keep the move, and keep the two `pnpm/action-setup` steps
   separate. See [docs/consuming.md](docs/consuming.md).
+- **Keep the consumer install authenticated.** Both workflows declare
+  `packages: read` and set `NODE_AUTH_TOKEN` on the step that installs the
+  _consumer's_ dependencies — the capture-bundle install deliberately gets
+  neither. Dropping either one breaks only consumers with a private `.npmrc` _and_
+  a cold store, so it passes CI here and fails in the fleet;
+  `test/workflow-registry-auth.test.ts` guards it. Callers must grant
+  `packages: read` too, since a called workflow can only narrow the caller's
+  permissions. See [docs/consuming.md](docs/consuming.md#private-registry-dependencies).
 
 ## Reusable-workflow gotcha: no `./`-local actions across the boundary
 
