@@ -55,6 +55,11 @@ the PR coordinator escalates to a human), whereas a non-zero exit is a _failure_
 (auto-routed to fix-review, where an agent can fix a slow or broken story). The
 job's `continue-on-error` keeps that failure non-blocking for the merge.
 
+The corollary: a problem **no code change can fix** is neither a failure nor a
+cancellation. A missing, invalid, or rate-limited `STORYBOOK_SCREENSHOT_PAT` posts
+an advisory comment for a human and lets the job succeed with a warning — see
+[authentication](authentication.md#missing-invalid-or-rate-limited-pat--advisory-never-red).
+
 ## Best-effort Before render (screenshots)
 
 `capture-base` adds a second render — the PR's base, built in a detached worktree

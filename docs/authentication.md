@@ -118,26 +118,34 @@ for one, so there is nothing to count down. That is the main practical reason to
 set an expiration: a no-expiry token trades a scheduled, announced rotation for an
 unannounced failure whenever it is eventually revoked.
 
-## Missing or invalid PAT — advisory, never blocking
+## Missing, invalid, or rate-limited PAT — advisory, never red
 
-A same-repo PR whose PAT is missing or invalid never fails the merge. Before the
-expensive Storybook build, a **preflight** step checks the PAT:
+A same-repo PR whose PAT cannot post the gallery never fails the merge **and never
+turns the screenshots job red**. A PAT problem is configuration, not code, so a red
+job (routed to fix-review) would only send an agent after something it cannot fix.
+Before the expensive Storybook build, a **preflight** step checks the PAT:
 
-- **missing** (secret not set) or **invalid** (set but fails to authenticate) → the
-  job posts a single, update-in-place **advisory PR comment** — "Storybook
-  screenshots are configured but the PAT is missing/invalid; this does not block the
-  PR" — and skips the build and capture. The comment is posted with the Actions
-  `GITHUB_TOKEN` (which can post a normal comment even though it cannot do
-  `--attach`), tagged with its own marker (`<!-- storybook-screenshots-advisory -->`)
-  so a reviewer sees exactly one notice.
+- **missing** (secret not set), **invalid** (set but fails to authenticate), or
+  **rate-limited** (valid, but its account has exhausted its GitHub API quota) → the
+  job posts a single, update-in-place **advisory PR comment** naming the reason,
+  adds a `::warning::` annotation to the run, skips the build and capture, and
+  **succeeds**. The comment is posted with the Actions `GITHUB_TOKEN` (which can post
+  a normal comment even though it cannot do `--attach`), tagged with its own marker
+  (`<!-- storybook-screenshots-advisory -->`) so a reviewer sees exactly one notice.
 - **valid** → any prior advisory comment is deleted and the gallery is captured and
   posted as usual.
 
 If the PAT authenticates in preflight but the user-attachments upload is still
-rejected (e.g. a token lacking the needed scope), the capture step posts the same
-advisory and exits non-zero — a red, **non-blocking** job (the whole screenshots
-job is `continue-on-error`). So the states are: valid → gallery; missing/invalid →
-advisory comment; and in every case the merge is never blocked.
+rejected — a token lacking the needed scope, or the account's rate limit running
+out mid-job (the `--attach` upload is GraphQL-heavy) — the capture step posts the
+same advisory with the matching reason, annotates the run, and exits **zero**. A
+rate-limited advisory says the token is fine and to re-run once the limit resets, so
+nobody rotates a working PAT.
+
+The job still fails for code problems: a story that will not render or a blown
+`capture-deadline-ms` (see [Fail, don't cancel](overview.md#fail-dont-cancel-screenshots)).
+So the states are: valid → gallery; missing/invalid/rate-limited → advisory comment
+and a green job with a warning; and in every case the merge is never blocked.
 
 ## Fork safety
 

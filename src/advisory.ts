@@ -4,11 +4,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 /**
- * Whether the screenshot PAT can post the gallery. `missing` (no secret) and
- * `invalid` (set but rejected) both mean the gallery cannot be posted; the
- * screenshots job then posts a non-blocking advisory comment instead.
+ * Whether the screenshot PAT can post the gallery. `missing` (no secret),
+ * `invalid` (set but rejected) and `rate-limited` (valid, but its account has
+ * exhausted its API quota) all mean the gallery cannot be posted; the screenshots
+ * job then posts a non-blocking advisory comment instead.
  */
-export type PatStatus = 'ok' | 'missing' | 'invalid';
+export type PatStatus = 'ok' | 'missing' | 'invalid' | 'rate-limited';
+
+/**
+ * Does a failed `gh` call's message say the token's account hit its API rate
+ * limit? That is a transient quota problem, not a bad token — the advisory must
+ * not send a reviewer off to rotate a PAT that works. Pure, so it is unit-tested.
+ */
+export function isRateLimitError(message: string): boolean {
+  return /rate limit/i.test(message);
+}
 
 export interface AdvisoryOptions {
   repo: string;
@@ -30,6 +40,16 @@ export function buildAdvisoryBody(
   marker: string,
   docsUrl: string,
 ): string {
+  if (status === 'rate-limited') {
+    return `${marker}
+## 📸 Storybook Screenshots — not posted
+
+Storybook screenshots are configured for this PR, but the gallery could not be posted because the account behind \`STORYBOOK_SCREENSHOT_PAT\` has **exceeded its GitHub API rate limit**. The token itself is fine.
+
+This is **advisory only** — it does **not** block the PR. Re-run the job once the rate limit resets (within the hour). See ${docsUrl}.
+
+<sub>storybook-ci</sub>`;
+  }
   const reason =
     status === 'missing'
       ? 'the `STORYBOOK_SCREENSHOT_PAT` secret is **not set**'

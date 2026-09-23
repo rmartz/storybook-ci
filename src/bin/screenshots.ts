@@ -11,10 +11,10 @@
  *
  *   screenshots preflight Check the screenshot PAT (present + able to auth) before
  *                         the expensive build. Emits `pat_status` to $GITHUB_OUTPUT.
- *                         When the PAT is missing/invalid it posts a non-blocking
- *                         advisory comment (via the Actions token) so a reviewer
- *                         learns the gallery is configured but can't post; when it
- *                         is valid it clears any prior advisory.
+ *                         When the PAT is missing/invalid/rate-limited it posts a
+ *                         non-blocking advisory comment (via the Actions token) so a
+ *                         reviewer learns the gallery is configured but can't post;
+ *                         when it is valid it clears any prior advisory.
  *
  *   screenshots capture-base
  *                         Screenshot the same stories from a build of the PR's
@@ -37,7 +37,7 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { clearAdvisory, postAdvisory } from '../advisory.js';
+import { clearAdvisory, isRateLimitError, postAdvisory } from '../advisory.js';
 import { buildExpiryNotice, parseTokenExpiration } from '../pat-expiry.js';
 import { captureStories } from '../capture.js';
 import { postScreenshotComment } from '../comment.js';
@@ -111,33 +111,49 @@ function advisoryOptions(): AdvisoryOptions {
 }
 
 /**
- * Does the PAT authenticate? A missing/expired/revoked token fails `gh api user`.
+ * Does the PAT authenticate? A missing/expired/revoked token fails `gh api user`;
+ * an exhausted rate limit fails it too, but says so, and is not the token's fault.
  * `-i` includes the response headers, which carry the token's expiration date —
  * the same request either way, so the expiry warning costs no extra API call.
  */
-function patProbe(pat: string): { authenticates: boolean; response: string } {
+function patProbe(pat: string): { status: PatStatus; response: string } {
   try {
     const response = execFileSync('gh', ['api', '-i', 'user'], {
       env: { ...process.env, GH_TOKEN: pat },
       encoding: 'utf8',
     });
-    return { authenticates: true, response };
-  } catch {
-    return { authenticates: false, response: '' };
+    return { status: 'ok', response };
+  } catch (error) {
+    return {
+      status: isRateLimitError(errorMessage(error)) ? 'rate-limited' : 'invalid',
+      response: '',
+    };
   }
+}
+
+/**
+ * The PAT cannot post the gallery. That is a configuration problem no code change
+ * fixes, so the job must not go red over it (a failure is routed to fix-review):
+ * post the advisory for the reviewer, annotate the run, and let the step succeed.
+ */
+function reportUnpostable(status: Exclude<PatStatus, 'ok'>): void {
+  console.log(
+    `::warning title=Storybook screenshots not posted::STORYBOOK_SCREENSHOT_PAT is ${status} — see the advisory comment on the PR.`,
+  );
+  postAdvisory(status, advisoryOptions());
 }
 
 function runPreflight(): void {
   const pat = env('SCREENSHOT_PAT');
   const probe = pat ? patProbe(pat) : null;
-  const status: PatStatus = !probe ? 'missing' : probe.authenticates ? 'ok' : 'invalid';
+  const status: PatStatus = probe?.status ?? 'missing';
   console.log(`preflight: pat_status=${status}`);
 
   const options = advisoryOptions();
   if (status === 'ok') {
     clearAdvisory(options);
   } else {
-    postAdvisory(status, options);
+    reportUnpostable(status);
   }
 
   // A valid-but-expiring token is NOT a failure: the status stays `ok` and the
@@ -279,11 +295,12 @@ async function runCapture(): Promise<void> {
     });
     console.log(`Published ${outcome.captured.length} screenshot(s).`);
   } catch (error) {
-    // The PAT authenticated in preflight but the user-attachments upload was
-    // still rejected (e.g. missing scope). Alert the reviewer, non-blocking.
-    console.error(`Screenshot upload failed: ${errorMessage(error)}`);
-    postAdvisory('invalid', advisoryOptions());
-    process.exit(1);
+    // The PAT authenticated in preflight but the upload was still rejected —
+    // a missing scope, or the account's rate limit running out mid-job. Neither
+    // is a code problem, so alert the reviewer and do NOT fail the job.
+    const message = errorMessage(error);
+    console.error(`Screenshot upload failed: ${message}`);
+    reportUnpostable(isRateLimitError(message) ? 'rate-limited' : 'invalid');
   }
 
   // Fail (fix-review), do not run to timeout (cancellation): see capture.ts.
