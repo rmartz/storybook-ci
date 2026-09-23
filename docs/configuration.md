@@ -25,24 +25,25 @@ few.
 
 ## `storybook-screenshots.yml` inputs
 
-| Input                    | Default                              | Purpose                                                                      |
-| ------------------------ | ------------------------------------ | ---------------------------------------------------------------------------- |
-| `package-manager`        | `pnpm`                               | `pnpm` \| `npm` \| `yarn` — drives the consumer install + build.             |
-| `node-version`           | `24.x`                               | Toolchain version.                                                           |
-| `build-command`          | `pnpm build-storybook`               | Produce the static bundle.                                                   |
-| `static-dir`             | `storybook-static`                   | Where `index.json` + assets land.                                            |
-| `story-globs`            | `src/**/*.stories.@(ts\|tsx)`        | Which files count as stories.                                                |
-| `component-globs`        | `src/**/*.@(ts\|tsx)`                | UI files that gate/resolve (see [change-filtering.md](change-filtering.md)). |
-| `storybook-config-globs` | `.storybook/**`                      | Files whose change forces a full capture.                                    |
-| `screenshot-resolver`    | `colocation`                         | `colocation` \| `changed-stories-only` \| `all` \| `import-graph`.           |
-| `viewport`               | `1280x720`                           | Capture size (`WIDTHxHEIGHT`).                                               |
-| `browser`                | `chromium`                           | Playwright browser to install/cache.                                         |
-| `capture-base`           | `false`                              | Also render the PR base and post Before/After (see below).                   |
-| `capture-deadline-ms`    | `240000`                             | Per-render fail-not-cancel budget (keep below the job timeout).              |
-| `timeout-minutes`        | `8`                                  | Backstop job timeout when `capture-base` is off.                             |
-| `base-timeout-minutes`   | `14`                                 | Backstop job timeout used instead when `capture-base` is on.                 |
-| `comment-marker`         | `<!-- storybook-screenshots-bot -->` | Update-in-place key.                                                         |
-| `gh-version`             | `2.99.0`                             | Exact `gh` version to install for `--attach` support.                        |
+| Input                     | Default                              | Purpose                                                                      |
+| ------------------------- | ------------------------------------ | ---------------------------------------------------------------------------- |
+| `package-manager`         | `pnpm`                               | `pnpm` \| `npm` \| `yarn` — drives the consumer install + build.             |
+| `node-version`            | `24.x`                               | Toolchain version.                                                           |
+| `build-command`           | `pnpm build-storybook`               | Produce the static bundle.                                                   |
+| `static-dir`              | `storybook-static`                   | Where `index.json` + assets land.                                            |
+| `story-globs`             | `src/**/*.stories.@(ts\|tsx)`        | Which files count as stories.                                                |
+| `component-globs`         | `src/**/*.@(ts\|tsx)`                | UI files that gate/resolve (see [change-filtering.md](change-filtering.md)). |
+| `storybook-config-globs`  | `.storybook/**`                      | Files whose change forces a full capture.                                    |
+| `screenshot-resolver`     | `colocation`                         | `colocation` \| `changed-stories-only` \| `all` \| `import-graph`.           |
+| `viewport`                | `1280x720`                           | Capture size (`WIDTHxHEIGHT`).                                               |
+| `browser`                 | `chromium`                           | Playwright browser to install/cache.                                         |
+| `capture-base`            | `false`                              | Also render the PR base and post Before/After (see below).                   |
+| `capture-deadline-ms`     | `240000`                             | Per-render fail-not-cancel budget (keep below the job timeout).              |
+| `timeout-minutes`         | `8`                                  | Backstop job timeout when `capture-base` is off.                             |
+| `base-timeout-minutes`    | `14`                                 | Backstop job timeout used instead when `capture-base` is on.                 |
+| `comment-marker`          | `<!-- storybook-screenshots-bot -->` | Update-in-place key.                                                         |
+| `gh-version`              | `2.99.0`                             | Exact `gh` version to install for `--attach` support.                        |
+| `pat-expiry-warning-days` | `14`                                 | Warn on the gallery when the PAT expires within this many days.              |
 
 ## `capture-base` — the Before/After gallery
 

@@ -52,6 +52,12 @@ export interface GalleryBodyOptions {
    */
   baseComplete?: boolean;
   headComplete?: boolean;
+  /**
+   * Optional one-line PAT-expiry warning from the preflight, rendered as a
+   * footer. Empty in the ordinary case — a token with no expiration date, or one
+   * expiring beyond the warning threshold.
+   */
+  expiryNote?: string;
 }
 
 const BEFORE_PREFIX = 'before-';
@@ -108,13 +114,15 @@ export function buildGalleryBody(rows: GalleryRow[], options: GalleryBodyOptions
     options.baseStatus === 'ok'
       ? `<sub>Generated from commit ${shortSha} — **Before** is the PR base.</sub>`
       : `<sub>Generated from commit ${shortSha}</sub>`;
+  // Blank lines on both sides, or the blockquote absorbs its neighbours.
+  const expiry = options.expiryNote ? `${options.expiryNote}\n\n` : '';
 
   return `${options.marker}
 ## 📸 Storybook Screenshots
 ${note}
 ${options.baseStatus === 'ok' ? pairedTable(rows, options) : singleTable(rows)}
 
-${footer}`;
+${expiry}${footer}`;
 }
 
 function singleTable(rows: GalleryRow[]): string {

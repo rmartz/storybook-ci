@@ -151,3 +151,46 @@ describe('buildGalleryBody', () => {
     expect(body).toMatch(/base.*unavailable/i);
   });
 });
+
+describe('buildGalleryBody PAT-expiry footer', () => {
+  const single = pairRenders([rendered('a', 'after')], []);
+  const notice = '> ⚠️ The `STORYBOOK_SCREENSHOT_PAT` secret expires in **9 days** (2026-10-01).';
+
+  // The ordinary case: a token with no expiration, or expiry beyond the window.
+  it('adds no footer when there is no expiry notice', () => {
+    const body = buildGalleryBody(single, { marker: MARKER, headSha: SHA, baseStatus: 'none' });
+    expect(body).not.toContain('⚠️');
+    expect(body).toContain('|\n\n<sub>Generated');
+  });
+
+  it('appends the expiry notice as a blockquote footer above the commit line', () => {
+    const body = buildGalleryBody(single, {
+      marker: MARKER,
+      headSha: SHA,
+      baseStatus: 'none',
+      expiryNote: notice,
+    });
+    expect(body.indexOf(notice)).toBeGreaterThan(body.indexOf('a.png'));
+    expect(body.indexOf(notice)).toBeLessThan(body.indexOf('<sub>Generated'));
+    // Blank lines on both sides, or the blockquote absorbs its neighbours.
+    expect(body).toContain(`\n\n${notice}\n\n`);
+  });
+
+  it('keeps the notice in the Before/After gallery too', () => {
+    const pair = pairRenders([rendered('a', 'after')], [rendered('a', 'before')]);
+    const body = buildGalleryBody(pair, {
+      marker: MARKER,
+      headSha: SHA,
+      baseStatus: 'ok',
+      expiryNote: notice,
+    });
+    expect(body).toContain(`\n\n${notice}\n\n<sub>Generated`);
+  });
+
+  it('treats an empty notice as no notice', () => {
+    const options = { marker: MARKER, headSha: SHA, baseStatus: 'none' as const };
+    expect(buildGalleryBody(single, { ...options, expiryNote: '' })).toBe(
+      buildGalleryBody(single, options),
+    );
+  });
+});

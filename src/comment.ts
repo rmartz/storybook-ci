@@ -24,6 +24,12 @@ export interface PostOptions {
   /** Did each render capture everything it selected? Drives the empty-cell label. */
   baseComplete?: boolean;
   headComplete?: boolean;
+  /**
+   * Optional one-line PAT-expiry warning from the preflight, rendered as a
+   * footer. Empty in the ordinary case — a token with no expiration date, or one
+   * expiring beyond the warning threshold.
+   */
+  expiryNote?: string;
 }
 
 /**
@@ -38,9 +44,9 @@ export interface PostOptions {
  * When a base render is present its PNGs are already in `outputDir`, so they are
  * attached alongside the head ones and the gallery gains a Before column.
  *
- * `gh` must be authenticated with a **classic PAT** (the user-attachments upload
- * endpoint rejects the Actions `GITHUB_TOKEN` — see docs/authentication.md); the
- * caller provides it via `GH_TOKEN` in the environment.
+ * `gh` must be authenticated with `STORYBOOK_SCREENSHOT_PAT` (the user-attachments
+ * upload endpoint rejects the Actions `GITHUB_TOKEN` — see docs/authentication.md);
+ * the caller provides it via `GH_TOKEN` in the environment.
  */
 export function postScreenshotComment(captured: CapturedStory[], options: PostOptions): void {
   const after = writeRenders(captured, options.outputDir, 'after');
@@ -56,6 +62,7 @@ export function postScreenshotComment(captured: CapturedStory[], options: PostOp
       baseStatus,
       baseComplete: options.baseComplete,
       headComplete: options.headComplete,
+      expiryNote: options.expiryNote,
     }),
     'utf8',
   );

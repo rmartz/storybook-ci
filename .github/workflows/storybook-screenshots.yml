@@ -96,6 +96,11 @@ on:
         type: string
         required: false
         default: '<!-- storybook-screenshots-bot -->'
+      pat-expiry-warning-days:
+        description: 'Warn on the gallery comment when the PAT expires within this many days. A token with no expiration date never warns.'
+        type: number
+        required: false
+        default: 14
       gh-version:
         description: 'Exact gh version to install for --attach support (>= 2.99.0).'
         type: string
@@ -239,6 +244,7 @@ jobs:
           ACTIONS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PAT_EXPIRY_WARNING_DAYS: ${{ inputs.pat-expiry-warning-days }}
         run: node "$RUNNER_TEMP/storybook-ci/dist/bin/screenshots.js" preflight
 
       # Replaces the capture bundle's pnpm with the one the consumer pins. Both
@@ -403,5 +409,8 @@ jobs:
           VIEWPORT: ${{ inputs.viewport }}
           CAPTURE_DEADLINE_MS: ${{ inputs.capture-deadline-ms }}
           COMMENT_MARKER: ${{ inputs.comment-marker }}
+          # Empty unless the preflight found the PAT expiring within the warning
+          # window; a valid-but-expiring token still posts the gallery normally.
+          PAT_EXPIRY_NOTE: ${{ steps.preflight.outputs.pat_expiry_note }}
           OUTPUT_DIR: ${{ runner.temp }}/storybook-screenshots-out
         run: node "$RUNNER_TEMP/storybook-ci/dist/bin/screenshots.js" capture
