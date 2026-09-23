@@ -73,6 +73,27 @@ gate short-circuits everything after it — including the PAT check — so the j
 goes green **without having exercised the token at all**. See
 [authentication.md](authentication.md#verifying-your-setup--a-green-job-is-not-proof).
 
+### Before/After (optional)
+
+Add `capture-base: true` to render the PR base alongside its head, so the gallery
+shows each story's old and new rendering side by side:
+
+```yaml
+jobs:
+  screenshots:
+    uses: rmartz/storybook-ci/.github/workflows/storybook-screenshots.yml@<sha> # vX.Y.Z
+    secrets: inherit
+    with:
+      capture-base: true
+```
+
+This roughly doubles the job (a second install, Storybook build, and capture),
+which is why it is off by default; the job timeout switches to
+`base-timeout-minutes` when it is on, so a consumer that leaves it alone keeps
+exactly the budget it had. The base render is best-effort — if it fails, the
+comment degrades to After-only and says so. See
+[configuration.md](configuration.md#capture-base--the-beforeafter-gallery).
+
 ## What adoption removes
 
 A repo migrating off a bespoke implementation deletes:
@@ -131,7 +152,9 @@ GitHub Packages, that install needs credentials, and both workflows provide them
 - the job token carries `packages: read`, so it can read same-owner packages; and
 - the install step exports `NODE_AUTH_TOKEN: ${{ github.token }}`, which is what
   an `.npmrc` line like `//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}`
-  interpolates.
+  interpolates. With `capture-base: true` the second install (of your base
+  branch) gets the same token, so the Before column resolves private packages
+  too.
 
 No PAT is involved — `STORYBOOK_SCREENSHOT_PAT` authorizes gallery uploads only
 (see [authentication.md](authentication.md)) and never reaches the install.

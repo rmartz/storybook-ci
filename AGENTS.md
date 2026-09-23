@@ -32,12 +32,21 @@ compatibility surface: renaming or removing one is a breaking change for every
 consumer. Add inputs with safe defaults rather than repurposing existing ones.
 Full reference: [docs/configuration.md](docs/configuration.md).
 
-## Four operational invariants that must not regress
+## Five operational invariants that must not regress
 
 - **Fail, don't cancel (screenshots).** The capture script enforces its own
   `capture-deadline-ms`, kept below the job `timeout-minutes`, and exits non-zero
   on the deadline or a broken story — a _failure_ routed to fix-review, not a
-  _cancellation_ escalated to a human. Keep the deadline below the timeout.
+  _cancellation_ escalated to a human. Keep the deadline below the timeout — and
+  below **half** of it when `capture-base` runs both renders on one job
+  (`base-timeout-minutes` carries that larger budget so an untouched
+  `timeout-minutes` keeps its meaning).
+- **The Before render never costs the After one.** Every step of the
+  `capture-base` path is `continue-on-error` and gated on its predecessor, and
+  `screenshots capture-base` itself never throws or exits non-zero. A base render
+  that cannot be produced writes no manifest, which the gallery reads as
+  "unavailable" and degrades to After-only. The head screenshots must survive
+  anything the base side does.
 - **Fork safety.** The screenshots job is skipped on fork PRs; the
   `STORYBOOK_SCREENSHOT_PAT` must never reach fork-authored code. See [docs/authentication.md](docs/authentication.md).
 - **Build the capture bundle outside the consumer's workspace.** The screenshots
@@ -50,8 +59,9 @@ Full reference: [docs/configuration.md](docs/configuration.md).
   the consumer's. Keep the move, and keep the two `pnpm/action-setup` steps
   separate. See [docs/consuming.md](docs/consuming.md).
 - **Keep the consumer install authenticated.** Both workflows declare
-  `packages: read` and set `NODE_AUTH_TOKEN` on the step that installs the
-  _consumer's_ dependencies — the capture-bundle install deliberately gets
+  `packages: read` and set `NODE_AUTH_TOKEN` on every step that installs the
+  _consumer's_ dependencies — including the `capture-base` install of the base
+  tree, which is their checkout too — while the capture-bundle install deliberately gets
   neither. Dropping either one breaks only consumers with a private `.npmrc` _and_
   a cold store, so it passes CI here and fails in the fleet;
   `test/workflow-registry-auth.test.ts` guards it. Callers must grant
