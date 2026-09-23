@@ -152,7 +152,9 @@ GitHub Packages, that install needs credentials, and both workflows provide them
 - the job token carries `packages: read`, so it can read same-owner packages; and
 - the install step exports `NODE_AUTH_TOKEN: ${{ github.token }}`, which is what
   an `.npmrc` line like `//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}`
-  interpolates.
+  interpolates. With `capture-base: true` the second install (of your base
+  branch) gets the same token, so the Before column resolves private packages
+  too.
 
 No PAT is involved — `STORYBOOK_SCREENSHOT_PAT` authorizes gallery uploads only
 (see [authentication.md](authentication.md)) and never reaches the install.

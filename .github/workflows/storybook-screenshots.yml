@@ -300,6 +300,9 @@ jobs:
         working-directory: ${{ runner.temp }}/sb-base
         env:
           PM: ${{ inputs.package-manager }}
+          # The base tree is the consumer's own checkout, so it carries their
+          # .npmrc — authenticate it exactly like the head install above.
+          NODE_AUTH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           case "$PM" in
