@@ -33,6 +33,32 @@ describe('buildAdvisoryBody', () => {
   });
 });
 
+describe('buildAdvisoryBody — quoted GitHub error', () => {
+  it('omits the error block when there is no error (e.g. a missing secret)', () => {
+    expect(buildAdvisoryBody('missing', MARKER, DOCS)).not.toContain('GitHub reported');
+  });
+
+  it('quotes the error verbatim so a misclassification is visible', () => {
+    const detail = 'GraphQL: API rate limit already exceeded for user ID 1032849.';
+    const body = buildAdvisoryBody('invalid', MARKER, DOCS, detail);
+    expect(body).toContain('GitHub reported');
+    expect(body).toContain(detail);
+    expect(body).toContain('misclassified');
+    expect(body.endsWith('<sub>storybook-ci</sub>')).toBe(true);
+  });
+
+  it('fences the error so backticks in it cannot break out', () => {
+    const body = buildAdvisoryBody('invalid', MARKER, DOCS, 'bad ```` token');
+    expect(body).toContain('`````text\nbad ```` token\n`````');
+  });
+
+  it('truncates a very long error', () => {
+    const body = buildAdvisoryBody('invalid', MARKER, DOCS, 'x'.repeat(5000));
+    expect(body).toContain(`${'x'.repeat(1500)}…`);
+    expect(body).not.toContain('x'.repeat(1501));
+  });
+});
+
 describe('classifyGhFailure', () => {
   it('recognizes GraphQL, REST, and secondary rate limits', () => {
     expect(classifyGhFailure('GraphQL: API rate limit already exceeded for user ID 1032849.')).toBe(

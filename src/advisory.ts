@@ -39,34 +39,63 @@ export interface AdvisoryOptions {
   docsUrl: string;
 }
 
+/** Longest GitHub error quoted in the comment; gh's stderr can run long. */
+const MAX_DETAIL_LENGTH = 1500;
+
+const HEADLINES: Record<AdvisoryReason, string> = {
+  missing: 'the `STORYBOOK_SCREENSHOT_PAT` secret is **not set**',
+  invalid: 'the `STORYBOOK_SCREENSHOT_PAT` secret is **invalid or expired**',
+  'rate-limited':
+    'the account behind `STORYBOOK_SCREENSHOT_PAT` has **exceeded its GitHub API rate limit**. The token itself is fine',
+};
+
+const REMEDIES: Record<AdvisoryReason, string> = {
+  missing:
+    'This is **advisory only** — it does **not** block the PR. To restore the gallery, set a fine-grained PAT with `Pull requests: Read and write` on this repository as the `STORYBOOK_SCREENSHOT_PAT` secret, then re-run the job.',
+  invalid:
+    'This is **advisory only** — it does **not** block the PR. To restore the gallery, set a fine-grained PAT with `Pull requests: Read and write` on this repository as the `STORYBOOK_SCREENSHOT_PAT` secret, then re-run the job.',
+  'rate-limited':
+    'This does **not** block the PR. Re-run the job once the rate limit resets (within the hour).',
+};
+
 /**
  * Body of the advisory comment: states that screenshots are configured but the
- * PAT is missing/invalid, that this does not block the PR, and how to fix it.
+ * PAT cannot post, that this does not block the PR, and how to fix it. When the
+ * reason was inferred from a GitHub error, that error is quoted verbatim — the
+ * classification matches on GitHub's wording, so a human reading the comment can
+ * spot a message that was misread (e.g. a rate limit reported as a bad token).
  * Pure, so it is unit-tested.
  */
-export function buildAdvisoryBody(status: AdvisoryReason, marker: string, docsUrl: string): string {
-  if (status === 'rate-limited') {
-    return `${marker}
-## 📸 Storybook Screenshots — not posted
-
-Storybook screenshots are configured for this PR, but the gallery could not be posted because the account behind \`STORYBOOK_SCREENSHOT_PAT\` has **exceeded its GitHub API rate limit**. The token itself is fine.
-
-This does **not** block the PR. Re-run the job once the rate limit resets (within the hour). See ${docsUrl}.
-
-<sub>storybook-ci</sub>`;
+export function buildAdvisoryBody(
+  status: AdvisoryReason,
+  marker: string,
+  docsUrl: string,
+  detail = '',
+): string {
+  const sections = [
+    `${marker}\n## 📸 Storybook Screenshots — not posted`,
+    `Storybook screenshots are configured for this PR, but the gallery could not be posted because ${HEADLINES[status]}.`,
+    `${REMEDIES[status]} See ${docsUrl}.`,
+  ];
+  const quoted = detail.trim();
+  if (quoted) {
+    sections.push(
+      `GitHub reported:\n\n${fence(truncate(quoted))}\n\nIf that error doesn't match the reason above, storybook-ci misclassified it — please report it.`,
+    );
   }
-  const reason =
-    status === 'missing'
-      ? 'the `STORYBOOK_SCREENSHOT_PAT` secret is **not set**'
-      : 'the `STORYBOOK_SCREENSHOT_PAT` secret is **invalid or expired**';
-  return `${marker}
-## 📸 Storybook Screenshots — not posted
+  sections.push('<sub>storybook-ci</sub>');
+  return sections.join('\n\n');
+}
 
-Storybook screenshots are configured for this PR, but the gallery could not be posted because ${reason}.
+function truncate(text: string): string {
+  return text.length > MAX_DETAIL_LENGTH ? `${text.slice(0, MAX_DETAIL_LENGTH)}…` : text;
+}
 
-This is **advisory only** — it does **not** block the PR. To restore the gallery, set a fine-grained PAT with \`Pull requests: Read and write\` on this repository as the \`STORYBOOK_SCREENSHOT_PAT\` secret, then re-run the job. See ${docsUrl}.
-
-<sub>storybook-ci</sub>`;
+/** A code fence longer than any backtick run in the text, so it cannot break out. */
+function fence(text: string): string {
+  const longestRun = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
+  const ticks = '`'.repeat(Math.max(3, longestRun + 1));
+  return `${ticks}text\n${text}\n${ticks}`;
 }
 
 interface ExistingComment {
@@ -75,9 +104,9 @@ interface ExistingComment {
 }
 
 /** Post or update-in-place the advisory comment, matched by its marker. */
-export function postAdvisory(status: AdvisoryReason, options: AdvisoryOptions): void {
+export function postAdvisory(status: AdvisoryReason, options: AdvisoryOptions, detail = ''): void {
   const existingId = findMarkerCommentId(options);
-  const body = buildAdvisoryBody(status, options.marker, options.docsUrl);
+  const body = buildAdvisoryBody(status, options.marker, options.docsUrl, detail);
   const dir = mkdtempSync(join(tmpdir(), 'sb-advisory-'));
   const file = join(dir, 'body.json');
   writeFileSync(file, JSON.stringify({ body }), 'utf8');

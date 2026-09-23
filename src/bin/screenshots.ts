@@ -41,7 +41,7 @@ import { classifyGhFailure, clearAdvisory, postAdvisory } from '../advisory.js';
 import { buildExpiryNotice, parseTokenExpiration } from '../pat-expiry.js';
 import { captureStories } from '../capture.js';
 import { postScreenshotComment } from '../comment.js';
-import { errorMessage } from '../lib/error-message.js';
+import { errorMessage, stderrOf } from '../lib/error-message.js';
 import { findFiles } from '../lib/find-files.js';
 import { resolveStories } from '../resolve-stories.js';
 import { readBaseRender, writeBaseManifest, writeRenders } from '../renders.js';
@@ -116,13 +116,13 @@ function advisoryOptions(): AdvisoryOptions {
  * `-i` includes the response headers, which carry the token's expiration date —
  * the same request either way, so the expiry warning costs no extra API call.
  */
-function patProbe(pat: string): { status: PatStatus; response: string } {
+function patProbe(pat: string): { status: PatStatus; response: string; error: string } {
   try {
     const response = execFileSync('gh', ['api', '-i', 'user'], {
       env: { ...process.env, GH_TOKEN: pat },
       encoding: 'utf8',
     });
-    return { status: 'ok', response };
+    return { status: 'ok', response, error: '' };
   } catch (error) {
     const message = errorMessage(error);
     console.error(`preflight: gh api user failed: ${message}`);
@@ -133,7 +133,7 @@ function patProbe(pat: string): { status: PatStatus; response: string } {
         : failure === 'rate-limited'
           ? 'rate-limited'
           : 'unverified';
-    return { status, response: '' };
+    return { status, response: '', error: stderrOf(error) };
   }
 }
 
@@ -142,11 +142,14 @@ function patProbe(pat: string): { status: PatStatus; response: string } {
  * so the job must not go red over it (a failure is routed to fix-review): post
  * the advisory for the reviewer, annotate the run, and let the step succeed.
  */
-function reportMisconfigured(status: Extract<AdvisoryReason, 'missing' | 'invalid'>): void {
+function reportMisconfigured(
+  status: Extract<AdvisoryReason, 'missing' | 'invalid'>,
+  detail = '',
+): void {
   console.log(
     `::warning title=Storybook screenshots not posted::STORYBOOK_SCREENSHOT_PAT is ${status} — see the advisory comment on the PR.`,
   );
-  postAdvisory(status, advisoryOptions());
+  postAdvisory(status, advisoryOptions(), detail);
 }
 
 function runPreflight(): void {
@@ -159,9 +162,9 @@ function runPreflight(): void {
   if (status === 'ok') {
     clearAdvisory(options);
   } else if (status === 'missing' || status === 'invalid') {
-    reportMisconfigured(status);
+    reportMisconfigured(status, probe?.error);
   } else if (status === 'rate-limited') {
-    postAdvisory(status, options);
+    postAdvisory(status, options, probe?.error);
   }
 
   // A valid-but-expiring token is NOT a failure: the status stays `ok` and the
@@ -315,9 +318,10 @@ async function runCapture(): Promise<void> {
     console.error(`Screenshot upload failed: ${message}`);
     const failure = classifyGhFailure(message);
     if (failure === 'rejected') {
-      reportMisconfigured('invalid');
+      reportMisconfigured('invalid', stderrOf(error));
     } else {
-      if (failure === 'rate-limited') postAdvisory('rate-limited', advisoryOptions());
+      if (failure === 'rate-limited')
+        postAdvisory('rate-limited', advisoryOptions(), stderrOf(error));
       process.exit(1);
     }
   }

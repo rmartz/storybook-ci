@@ -154,7 +154,10 @@ flaky dependency:
 
 The failure is classified from `gh`'s stderr: a rate-limit message first (GitHub
 reports it as a 403 too), then any other 401/403 as a rejected token, and everything
-else as GitHub failing. So the states are: valid → gallery; missing/invalid →
+else as GitHub failing. Because that matches on GitHub's wording, every advisory
+that came from a GitHub error **quotes the error verbatim** (fenced, truncated at
+1500 characters) — so if GitHub rewords a message and it is misread (say, a rate
+limit reported as an invalid token), the author can see it and report it. So the states are: valid → gallery; missing/invalid →
 advisory and a green job with a warning; GitHub failure → red job; and in every case
 the merge is never blocked.
 
