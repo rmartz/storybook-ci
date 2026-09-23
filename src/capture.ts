@@ -4,6 +4,7 @@ import { extname, resolve } from 'node:path';
 
 import { chromium } from 'playwright';
 
+import { errorMessage } from './lib/error-message.js';
 import { resolveStaticPath } from './lib/static-path.js';
 import type { StoryIndexEntry } from './types.js';
 
@@ -134,8 +135,4 @@ function startStaticServer(staticDir: string, port: number): Promise<Server> {
 
 function closeServer(server: Server): Promise<void> {
   return new Promise((resolve) => server.close(() => resolve()));
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

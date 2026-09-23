@@ -27,6 +27,7 @@ on:
     branches: [main]
 permissions:
   contents: read
+  packages: read
 jobs:
   storybook-tests:
     uses: rmartz/storybook-ci/.github/workflows/storybook-tests.yml@<sha> # vX.Y.Z
@@ -44,6 +45,7 @@ on:
     paths: ['src/**/*.stories.tsx', 'src/**/*.stories.ts', 'src/**', '.storybook/**']
 permissions:
   contents: read
+  packages: read
   pull-requests: write
 jobs:
   screenshots:
@@ -53,6 +55,12 @@ jobs:
 
 Replace `<sha>` with the current release commit of `rmartz/storybook-ci`;
 Dependabot's `github-actions` ecosystem keeps the pin current.
+
+Keep `packages: read` even if you think you don't need it: a caller's
+`permissions:` block is exhaustive, a called workflow can only narrow it, and
+omitting the scope fails the dependency install with `ERR_PNPM_FETCH_401` in any
+repo whose `.npmrc` scopes a package to GitHub Packages. See
+[docs/consuming.md](docs/consuming.md#private-registry-dependencies).
 
 ## Screenshot posting needs a user-level PAT
 
