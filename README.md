@@ -48,19 +48,22 @@ permissions:
 jobs:
   screenshots:
     uses: rmartz/storybook-ci/.github/workflows/storybook-screenshots.yml@<sha> # vX.Y.Z
-    secrets: inherit # provides STORYBOOK_SCREENSHOT_PAT (classic PAT)
+    secrets: inherit # provides STORYBOOK_SCREENSHOT_PAT (fine-grained PAT)
 ```
 
 Replace `<sha>` with the current release commit of `rmartz/storybook-ci`;
 Dependabot's `github-actions` ecosystem keeps the pin current.
 
-## Screenshot posting needs a classic PAT
+## Screenshot posting needs a user-level PAT
 
 The GitHub user-attachments upload endpoint (`gh --attach`) rejects the Actions
-`GITHUB_TOKEN`, so the screenshots workflow authenticates `gh` with a **classic
-PAT** (`repo` scope) named `STORYBOOK_SCREENSHOT_PAT`, forwarded by
-`secrets: inherit`. The job is skipped on fork PRs so the PAT never reaches
-fork-authored code. See [docs/authentication.md](docs/authentication.md).
+`GITHUB_TOKEN`, so the screenshots workflow authenticates `gh` with a PAT named
+`STORYBOOK_SCREENSHOT_PAT`, forwarded by `secrets: inherit`. Use a **fine-grained
+PAT** scoped to the consuming repository with a single permission,
+**`Pull requests: Read and write`** — tested, and `Contents` is not needed. A
+classic `repo`-scoped PAT also works but grants far more. The job is skipped on
+fork PRs so the PAT never reaches fork-authored code. See
+[docs/authentication.md](docs/authentication.md).
 
 ## Documentation
 

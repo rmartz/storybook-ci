@@ -52,7 +52,7 @@ permissions:
 jobs:
   screenshots:
     uses: rmartz/storybook-ci/.github/workflows/storybook-screenshots.yml@<sha> # vX.Y.Z
-    secrets: inherit # provides STORYBOOK_SCREENSHOT_PAT (classic PAT)
+    secrets: inherit # provides STORYBOOK_SCREENSHOT_PAT (fine-grained PAT)
 ```
 
 Both scopes are required: a caller's `permissions:` block is exhaustive — every
@@ -63,6 +63,12 @@ The screenshots caller needs **no** `concurrency` or `continue-on-error` block �
 per-PR concurrency and the advisory isolation are centralized in the reusable
 workflow. `secrets: inherit` is what forwards `STORYBOOK_SCREENSHOT_PAT`; see
 [authentication.md](authentication.md).
+
+When validating a newly-configured PAT, use a PR that actually touches a story
+file or a co-located component. On a PR whose changes resolve to zero stories the
+gate short-circuits everything after it — including the PAT check — so the job
+goes green **without having exercised the token at all**. See
+[authentication.md](authentication.md#verifying-your-setup--a-green-job-is-not-proof).
 
 ## What adoption removes
 
@@ -93,3 +99,22 @@ published package — it checks `rmartz/storybook-ci` out at the exact SHA the
 consumer pinned (`job.workflow_sha`), builds the bundle, and runs it. So a pinned
 ref is fully reproducible, and the version lives only in the git tag Dependabot
 bumps — never hardcoded in a workflow file.
+
+That bundle builds in **isolation from your repository**. `actions/checkout`
+refuses any path outside `GITHUB_WORKSPACE`, so the checkout lands at
+`_storybook-ci` inside your checkout and the workflow immediately moves it to
+`$RUNNER_TEMP` before installing anything. That matters because a package manager
+reads the directories _above_ the one it installs in: a root `pnpm-workspace.yaml`
+would make our install resolve **your** dependency graph instead of ours, and a
+root `.npmrc` scoping a private registry (`@scope:registry=…` with an auth token
+we are not given) would then fail that install with `ERR_PNPM_FETCH_401` on
+packages we never declared. The install also runs under the pnpm **our**
+`package.json` pins, so your pnpm major cannot break it.
+
+Two consequences for you:
+
+- Nothing in your `.npmrc`, `pnpm-workspace.yaml`, or lockfile affects the capture
+  bundle, and you do **not** need to grant `packages: read` or pass a registry
+  token for it.
+- `_storybook-ci` never survives into your install step, so a workspace that globs
+  broadly (`packages: ['**']`) will not pick it up as a member.

@@ -9,7 +9,7 @@ name: Storybook Screenshots (reusable)
 #   jobs:
 #     screenshots:
 #       uses: rmartz/storybook-ci/.github/workflows/storybook-screenshots.yml@<sha>  # vX.Y.Z
-#       secrets: inherit   # provides STORYBOOK_SCREENSHOT_PAT (classic PAT)
+#       secrets: inherit   # provides STORYBOOK_SCREENSHOT_PAT (fine-grained PAT)
 #
 # The advisory isolation (continue-on-error), per-PR concurrency, fork-skip,
 # fail-vs-cancel, change gating, and Chromium provisioning all live here — the
@@ -86,7 +86,7 @@ on:
         default: 2.99.0
     secrets:
       STORYBOOK_SCREENSHOT_PAT:
-        description: 'Classic PAT (repo scope) that authorizes gh --attach uploads.'
+        description: 'Fine-grained PAT (Pull requests: read/write) that authorizes gh --attach uploads. A classic repo-scoped PAT also works.'
         required: false
 
 permissions:
@@ -110,7 +110,7 @@ jobs:
     continue-on-error: true
     timeout-minutes: ${{ inputs.timeout-minutes }}
     # Forked PRs receive a read-only token and (rightly) no PAT, so skip them —
-    # the classic PAT must NEVER be exposed to fork-authored code.
+    # the PAT must NEVER be exposed to fork-authored code.
     if: github.event.pull_request.head.repo.full_name == github.repository
     # Storybook phones home on every invocation unless told not to. CI is not a
     # useful telemetry sample and the call is latency + a network dependency we
@@ -134,7 +134,6 @@ jobs:
           echo "Changed files:"; echo "$changed"
           printf 'files<<EOF\n%s\nEOF\n' "$changed" >> "$GITHUB_OUTPUT"
 
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ inputs.node-version }}
@@ -144,10 +143,37 @@ jobs:
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
+          # actions/checkout refuses any path outside GITHUB_WORKSPACE, so the
+          # bundle necessarily lands inside the consumer checkout; the step below
+          # moves it out before anything installs.
           path: _storybook-ci
 
+      # Our bundle installs under the pnpm OUR package.json pins; the consumer's
+      # install (further down) uses the one THEIRS pins. Sharing one setup would
+      # make our --frozen-lockfile install depend on the consumer's pnpm major,
+      # and a lockfile-format gap would fail a build that has nothing to do with
+      # them. package_json_file is resolved against GITHUB_WORKSPACE, so this must
+      # run while _storybook-ci is still inside the workspace — i.e. before the move.
+      - name: Set up pnpm for the capture bundle
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          package_json_file: _storybook-ci/package.json
+
+      # The capture bundle is this repo's code at its own pinned SHA and must build
+      # in isolation from the consumer. Left inside their checkout it inherits every
+      # ancestor file: a root pnpm-workspace.yaml makes pnpm resolve the CONSUMER's
+      # graph instead of ours, a root .npmrc scoping a private registry then 401s on
+      # packages we never declared, and a workspace globbing `packages: ['**']` drags
+      # _storybook-ci into the consumer's own install. Moving the tree out of
+      # GITHUB_WORKSPACE removes all of those at once, rather than enumerating them.
+      - name: Move the capture bundle outside the consumer workspace
+        run: mv "$GITHUB_WORKSPACE/_storybook-ci" "$RUNNER_TEMP/storybook-ci"
+
       - name: Build storybook-ci capture bundle
-        run: pnpm -C _storybook-ci install --frozen-lockfile && pnpm -C _storybook-ci build
+        run: |
+          set -euo pipefail
+          pnpm -C "$RUNNER_TEMP/storybook-ci" install --frozen-lockfile
+          pnpm -C "$RUNNER_TEMP/storybook-ci" build
 
       - name: Resolve stories to capture (gate)
         id: gate
@@ -158,7 +184,7 @@ jobs:
           COMPONENT_GLOBS: ${{ inputs.component-globs }}
           STORYBOOK_CONFIG_GLOBS: ${{ inputs.storybook-config-globs }}
           RESOLVER: ${{ inputs.screenshot-resolver }}
-        run: node _storybook-ci/dist/bin/screenshots.js gate
+        run: node "$RUNNER_TEMP/storybook-ci/dist/bin/screenshots.js" gate
 
       # PAT preflight, before the expensive build. When the PAT is missing or
       # invalid this posts a non-blocking advisory PR comment (via the Actions
@@ -175,7 +201,16 @@ jobs:
           ACTIONS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: node _storybook-ci/dist/bin/screenshots.js preflight
+        run: node "$RUNNER_TEMP/storybook-ci/dist/bin/screenshots.js" preflight
+
+      # Replaces the capture bundle's pnpm with the one the consumer pins. Both
+      # setups share a dest directory, so the later run wins — ordering, not PATH,
+      # decides which pnpm is active. Only pnpm consumers need this: it reads their
+      # package.json `packageManager`, which an npm or yarn consumer does not set to
+      # pnpm, and the capture bundle no longer depends on this step running.
+      - name: Set up pnpm for the consumer
+        if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok' && inputs.package-manager == 'pnpm'
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
 
       - name: Install consumer dependencies
         if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok'
@@ -200,7 +235,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ inputs.browser }}-${{ hashFiles('_storybook-ci/pnpm-lock.yaml') }}
+          # The bundle now lives outside GITHUB_WORKSPACE, where hashFiles() cannot
+          # reach it — and its pinned SHA already determines the Playwright version.
+          key: playwright-${{ runner.os }}-${{ inputs.browser }}-${{ job.workflow_sha }}
           restore-keys: |
             playwright-${{ runner.os }}-${{ inputs.browser }}-
 
@@ -213,7 +250,7 @@ jobs:
           set -euo pipefail
           if [ "$CACHE_HIT" = "true" ]; then sub="install-deps"; else sub="install --with-deps"; fi
           for i in 1 2 3; do
-            if pnpm -C _storybook-ci exec playwright $sub $BROWSER; then exit 0; fi
+            if pnpm -C "$RUNNER_TEMP/storybook-ci" exec playwright $sub $BROWSER; then exit 0; fi
             echo "playwright install failed (attempt $i/3) — retrying in 5s"; sleep 5
           done
           exit 1
@@ -236,7 +273,7 @@ jobs:
 
       - name: Capture screenshots and post PR comment
         # Only reached when the PAT preflight passed, so the token is present and
-        # authenticates. gh authenticates with the classic PAT — the
+        # authenticates. gh authenticates with STORYBOOK_SCREENSHOT_PAT — the
         # user-attachments upload endpoint rejects the Actions GITHUB_TOKEN (an
         # installation token). ACTIONS_TOKEN is passed only so an upload failure can
         # post the advisory comment. See docs/authentication.md.
@@ -257,4 +294,4 @@ jobs:
           CAPTURE_DEADLINE_MS: ${{ inputs.capture-deadline-ms }}
           COMMENT_MARKER: ${{ inputs.comment-marker }}
           OUTPUT_DIR: ${{ runner.temp }}/storybook-screenshots-out
-        run: node _storybook-ci/dist/bin/screenshots.js capture
+        run: node "$RUNNER_TEMP/storybook-ci/dist/bin/screenshots.js" capture
