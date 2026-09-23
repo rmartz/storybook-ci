@@ -27,7 +27,10 @@ bump `package.json` by hand.
 The consumer-facing contract is the **inputs** of
 [`storybook-tests.yml`](.github/workflows/storybook-tests.yml) and
 [`storybook-screenshots.yml`](.github/workflows/storybook-screenshots.yml), and
-the `STORYBOOK_SCREENSHOT_PAT` secret. Treat those input names/defaults as a
+the `STORYBOOK_SCREENSHOT_PAT` secret. They stay **reusable workflows** rather
+than composite Actions — the reasoning, and what would reopen it, is recorded in
+[docs/reusable-workflows-vs-actions.md](docs/reusable-workflows-vs-actions.md).
+Treat those input names/defaults as a
 compatibility surface: renaming or removing one is a breaking change for every
 consumer. Add inputs with safe defaults rather than repurposing existing ones.
 Full reference: [docs/configuration.md](docs/configuration.md).

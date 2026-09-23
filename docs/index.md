@@ -20,5 +20,8 @@ Documentation for `storybook-ci`, the fleet's shared Storybook CI, written in
 - [Authentication](authentication.md) — why screenshot posting needs a user-level
   PAT, the tested minimum permissions for a fine-grained one, and how the secret
   reaches the workflow safely.
+- [Reusable workflows vs. a composite Action](reusable-workflows-vs-actions.md) —
+  why the consumer surface stays two reusable workflows, why the
+  `repo-hygiene-action` precedent does not transfer, and what would reopen it.
 - [The OKF documentation format](okf-format.md) — how these pages are structured
   and validated in this repo.

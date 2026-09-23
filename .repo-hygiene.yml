@@ -12,8 +12,8 @@ checks:
   # vice versa.
   md-pairing:
     wrapper: true
-  # OKF docs-frontmatter conformance. The doc pages here are all concept/guide
-  # pages, so they use the `Reference` type (resource-exempt alongside `Design`).
+  # OKF docs-frontmatter conformance. The doc pages here are concept/guide pages
+  # (`Reference`) plus recorded design decisions (`Design`) — both resource-exempt.
   okf:
     types: [Skill, Script, Library, Design, Reference]
     resourceExemptTypes: [Design, Reference]
