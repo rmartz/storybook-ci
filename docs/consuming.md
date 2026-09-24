@@ -173,5 +173,13 @@ Two things make this failure easy to miss:
 - It needs a **private** dependency. A consumer with no `.npmrc` never
   interpolates the token, so both settings are inert there and cost nothing.
 
+Both workflows restore your package-manager store with `actions/setup-node`'s
+`cache:` (keyed on your lockfile), and they share **one** cache entry — a store the
+tests job saved also warms the screenshots job. That is an optimization, never a
+substitute for the credentials above: a lockfile change is exactly when the store
+goes cold and the install must authenticate. In the screenshots job the restore
+runs after the capture bundle is built, so your store never reaches our isolated
+install.
+
 Cross-owner packages, which the built-in `GITHUB_TOKEN` cannot read, are not
 supported today; open an issue if you need one.

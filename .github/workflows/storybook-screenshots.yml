@@ -258,6 +258,21 @@ jobs:
         if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok' && inputs.package-manager == 'pnpm'
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
 
+      # Restore the consumer's package-manager store, keyed on their lockfile — the
+      # same cache (and key) storybook-tests.yml's setup-node saves, so a warm hit
+      # from the tests job serves this one too. It cannot ride on the setup-node at
+      # the top of the job: that runs before any pnpm exists, and `cache: pnpm`
+      # resolves the store path with the active pnpm. Placed here, after the
+      # consumer's pnpm and after the capture-bundle install, so the consumer's
+      # store never feeds our isolated bundle install. An optimization only: the
+      # install below still authenticates, so a cold store behaves identically.
+      - name: Restore consumer package-manager cache
+        if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ inputs.package-manager }}
+
       - name: Install consumer dependencies
         if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.pat_status == 'ok'
         env:
