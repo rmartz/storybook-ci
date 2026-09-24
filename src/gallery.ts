@@ -103,6 +103,21 @@ export function pairRenders(after: RenderedStory[], before: RenderedStory[]): Ga
   return rows;
 }
 
+/**
+ * Would the gallery show any image at all? Head screenshots always count; base
+ * ones only when the body shows the Before column (`ok`). When every head capture
+ * failed and no base render is usable, posting would publish an empty table — and
+ * edit-in-place would overwrite the last good gallery with it — so the caller
+ * skips the comment. The job still fails on the incomplete capture.
+ */
+export function hasGalleryImages(
+  afterCount: number,
+  beforeCount: number,
+  baseStatus: BaseRenderStatus,
+): boolean {
+  return afterCount > 0 || (baseStatus === 'ok' && beforeCount > 0);
+}
+
 /** The PR comment body: one update-in-place gallery, marker first. */
 export function buildGalleryBody(rows: GalleryRow[], options: GalleryBodyOptions): string {
   const shortSha = options.headSha.slice(0, 7);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildGalleryBody, pairRenders, renderedStory } from '../src/gallery.js';
+import { buildGalleryBody, hasGalleryImages, pairRenders, renderedStory } from '../src/gallery.js';
 import type { GallerySide, RenderedStory } from '../src/gallery.js';
 import type { StoryIndexEntry } from '../src/types.js';
 
@@ -192,5 +192,27 @@ describe('buildGalleryBody PAT-expiry footer', () => {
     expect(buildGalleryBody(single, { ...options, expiryNote: '' })).toBe(
       buildGalleryBody(single, options),
     );
+  });
+});
+
+describe('hasGalleryImages', () => {
+  it('is false when every head capture failed and there is no base render', () => {
+    expect(hasGalleryImages(0, 0, 'none')).toBe(false);
+    expect(hasGalleryImages(0, 0, 'ok')).toBe(false);
+  });
+
+  it('ignores base PNGs the body would not show', () => {
+    // An unavailable base render is not shown, so it cannot rescue an empty head.
+    expect(hasGalleryImages(0, 3, 'unavailable')).toBe(false);
+    expect(hasGalleryImages(0, 3, 'none')).toBe(false);
+  });
+
+  it('is true with any head screenshot', () => {
+    expect(hasGalleryImages(1, 0, 'none')).toBe(true);
+    expect(hasGalleryImages(2, 0, 'unavailable')).toBe(true);
+  });
+
+  it('is true with a usable base render alone (e.g. a PR that deletes stories)', () => {
+    expect(hasGalleryImages(0, 2, 'ok')).toBe(true);
   });
 });
