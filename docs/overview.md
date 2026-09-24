@@ -55,6 +55,11 @@ the PR coordinator escalates to a human), whereas a non-zero exit is a _failure_
 (auto-routed to fix-review, where an agent can fix a slow or broken story). The
 job's `continue-on-error` keeps that failure non-blocking for the merge.
 
+A failed capture still posts whatever it did get. But when **no** head story
+screenshots and no Before render is usable, there is nothing to show: the job
+fails without posting, and any previous gallery comment is left as it was rather
+than overwritten with an empty table.
+
 The corollary: consumer **misconfiguration** is neither a failure nor a
 cancellation. A missing or invalid `STORYBOOK_SCREENSHOT_PAT` posts an advisory
 comment for a human and lets the job succeed with a warning, while a GitHub-side
