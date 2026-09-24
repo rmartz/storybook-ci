@@ -2,23 +2,46 @@
 # Consumed through the reusable-workflow caller (.github/workflows/repo-hygiene.yml),
 # which names the checks below and points them at this config.
 #
+# Every enabled check except file-caps states `severity: error` explicitly.
+# md-pairing, okf and okf-index default to `warn` (report without failing CI),
+# which would leave the docs contract in AGENTS.md unenforced; the rest default to
+# `error` already, and are spelled out so every check's severity is visible here.
+#
 # docs/ is an OKF bundle — see docs/okf-format.md.
 checks:
+  # No committed merge-conflict markers.
+  conflict-markers:
+    severity: error
+  # Every third-party action SHA-pinned with a `# vX.Y.Z` comment.
+  action-pins:
+    severity: error
+  # Every dependency pinned to a full major.minor.patch.
+  package-pins:
+    severity: error
   # Intra-repo Markdown link integrity for docs pages.
   docs-links:
+    severity: error
     roots: [docs]
     exempt: []
   # Every AGENTS.md has a companion CLAUDE.md (a bare `@AGENTS.md` import) and
   # vice versa.
   md-pairing:
+    severity: error
     wrapper: true
   # OKF docs-frontmatter conformance. The doc pages here are concept/guide pages
   # (`Reference`) plus recorded design decisions (`Design`) — both resource-exempt.
   okf:
+    severity: error
     types: [Skill, Script, Library, Design, Reference]
     resourceExemptTypes: [Design, Reference]
     exempt: [docs/index.md]
-  # Per-glob size caps, dogfooded against our own source and docs.
+  # Every docs page reachable from docs/index.md.
+  okf-index:
+    severity: error
+    roots: [docs]
+  # Per-glob size caps, dogfooded against our own source and docs. Deliberately NO
+  # `severity:` here: it would override every finding, promoting the per-glob `warn`
+  # tier below to a hard failure. file-caps carries its own warn/error thresholds.
   file-caps:
     overrides:
       - glob: 'src/**/*.ts'
