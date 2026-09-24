@@ -149,6 +149,15 @@ Most are enforced by eslint; the intent:
   → patch; a breaking `!` → major; `docs:` / `chore:` / `style:` / `refactor:` /
   `test:` / `ci:` / `build:` do not release. The first release cut `v1.0.0`, so
   this is a 1.x line — there is no pre-1.0 cap.
+- **The two reusable workflows are product code, not this repo's CI.** A change to
+  `storybook-tests.yml` or `storybook-screenshots.yml` ships to consumers, so it
+  takes a **releasing** type (`feat:` / `fix:` / `perf:`) — never `ci:`, which
+  cuts no release and leaves consumers nothing to pin, and never `!` merely
+  because a workflow file changed. The general "a workflow change is `ci`-typed"
+  convention applies only to this repo's **own** CI: `ci.yml`, `release.yml`,
+  `repo-hygiene.yml`, the PR-title lint and the other callers, and
+  `.github/actions/setup`. (This happened once: #36 was retitled `perf` → `ci`
+  in review and merged without a release.)
 
 ## Agent directive files
 
