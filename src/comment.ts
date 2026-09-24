@@ -89,5 +89,7 @@ export function postScreenshotComment(captured: CapturedStory[], options: PostOp
   }
 
   // Run gh from outputDir so the `--attach` and body paths are bare filenames.
-  execFileSync('gh', args, { cwd: options.outputDir, stdio: 'inherit' });
+  // stderr is piped rather than inherited so a failure's message carries it —
+  // the caller reads it to tell a rate limit apart from a rejected token.
+  execFileSync('gh', args, { cwd: options.outputDir, stdio: ['ignore', 'inherit', 'pipe'] });
 }

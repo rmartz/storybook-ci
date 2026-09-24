@@ -12,9 +12,9 @@
  *   screenshots preflight Check the screenshot PAT (present + able to auth) before
  *                         the expensive build. Emits `pat_status` to $GITHUB_OUTPUT.
  *                         When the PAT is missing/invalid it posts a non-blocking
- *                         advisory comment (via the Actions token) so a reviewer
- *                         learns the gallery is configured but can't post; when it
- *                         is valid it clears any prior advisory.
+ *                         advisory comment (via the Actions token) and succeeds;
+ *                         a rate limit or other GitHub failure fails the step.
+ *                         When the PAT is valid it clears any prior advisory.
  *
  *   screenshots capture-base
  *                         Screenshot the same stories from a build of the PR's
@@ -37,16 +37,16 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { clearAdvisory, postAdvisory } from '../advisory.js';
+import { classifyGhFailure, clearAdvisory, postAdvisory } from '../advisory.js';
 import { buildExpiryNotice, parseTokenExpiration } from '../pat-expiry.js';
 import { captureStories } from '../capture.js';
 import { postScreenshotComment } from '../comment.js';
-import { errorMessage } from '../lib/error-message.js';
+import { errorMessage, stderrOf } from '../lib/error-message.js';
 import { findFiles } from '../lib/find-files.js';
 import { resolveStories } from '../resolve-stories.js';
 import { readBaseRender, writeBaseManifest, writeRenders } from '../renders.js';
 import { normalizeImportPath, readStoryEntries, storyFilesFromEntries } from '../story-index.js';
-import type { AdvisoryOptions, PatStatus } from '../advisory.js';
+import type { AdvisoryOptions, AdvisoryReason, PatStatus } from '../advisory.js';
 import type { CaptureOptions, CaptureOutcome } from '../capture.js';
 import type { BaseRenderStatus } from '../gallery.js';
 import type { ResolveInput, ScreenshotResolver, StoryIndexEntry } from '../types.js';
@@ -111,33 +111,60 @@ function advisoryOptions(): AdvisoryOptions {
 }
 
 /**
- * Does the PAT authenticate? A missing/expired/revoked token fails `gh api user`.
+ * Does the PAT authenticate? A missing/expired/revoked token fails `gh api user`;
+ * so does a rate limit or a GitHub outage, which are not the token's fault.
  * `-i` includes the response headers, which carry the token's expiration date —
  * the same request either way, so the expiry warning costs no extra API call.
  */
-function patProbe(pat: string): { authenticates: boolean; response: string } {
+function patProbe(pat: string): { status: PatStatus; response: string; error: string } {
   try {
     const response = execFileSync('gh', ['api', '-i', 'user'], {
       env: { ...process.env, GH_TOKEN: pat },
       encoding: 'utf8',
     });
-    return { authenticates: true, response };
-  } catch {
-    return { authenticates: false, response: '' };
+    return { status: 'ok', response, error: '' };
+  } catch (error) {
+    const message = errorMessage(error);
+    console.error(`preflight: gh api user failed: ${message}`);
+    const failure = classifyGhFailure(message);
+    const status =
+      failure === 'rejected'
+        ? 'invalid'
+        : failure === 'rate-limited'
+          ? 'rate-limited'
+          : 'unverified';
+    return { status, response: '', error: stderrOf(error) };
   }
+}
+
+/**
+ * The PAT is missing or rejected. That is misconfiguration no code change fixes,
+ * so the job must not go red over it (a failure is routed to fix-review): post
+ * the advisory for the reviewer, annotate the run, and let the step succeed.
+ */
+function reportMisconfigured(
+  status: Extract<AdvisoryReason, 'missing' | 'invalid'>,
+  detail = '',
+): void {
+  console.log(
+    `::warning title=Storybook screenshots not posted::STORYBOOK_SCREENSHOT_PAT is ${status} — see the advisory comment on the PR.`,
+  );
+  postAdvisory(status, advisoryOptions(), detail);
 }
 
 function runPreflight(): void {
   const pat = env('SCREENSHOT_PAT');
   const probe = pat ? patProbe(pat) : null;
-  const status: PatStatus = !probe ? 'missing' : probe.authenticates ? 'ok' : 'invalid';
+  const status: PatStatus = probe?.status ?? 'missing';
   console.log(`preflight: pat_status=${status}`);
 
   const options = advisoryOptions();
   if (status === 'ok') {
     clearAdvisory(options);
-  } else {
-    postAdvisory(status, options);
+  } else if (status === 'missing' || status === 'invalid') {
+    reportMisconfigured(status, probe?.error);
+  } else if (status === 'rate-limited') {
+    postAdvisory(status, options, probe?.error);
   }
 
   // A valid-but-expiring token is NOT a failure: the status stays `ok` and the
@@ -159,6 +186,10 @@ function runPreflight(): void {
     appendFileSync(output, `pat_status=${status}\n`);
     appendFileSync(output, `pat_expiry_note=${notice ?? ''}\n`);
   }
+
+  // GitHub failed rather than the configuration: fail like any flaky dependency.
+  // The failed step also skips the rest of the job.
+  if (status === 'rate-limited' || status === 'unverified') process.exit(1);
 }
 
 /** Days before expiry that the warning starts; a non-numeric input falls back. */
@@ -279,11 +310,20 @@ async function runCapture(): Promise<void> {
     });
     console.log(`Published ${outcome.captured.length} screenshot(s).`);
   } catch (error) {
-    // The PAT authenticated in preflight but the user-attachments upload was
-    // still rejected (e.g. missing scope). Alert the reviewer, non-blocking.
-    console.error(`Screenshot upload failed: ${errorMessage(error)}`);
-    postAdvisory('invalid', advisoryOptions());
-    process.exit(1);
+    // The PAT authenticated in preflight but the upload still failed. A rejected
+    // token (e.g. a missing scope) is misconfiguration: advise, stay green. A rate
+    // limit or any other GitHub failure fails the job like a flaky dependency; the
+    // rate limit also gets an advisory, so nobody rotates a token that works.
+    const message = errorMessage(error);
+    console.error(`Screenshot upload failed: ${message}`);
+    const failure = classifyGhFailure(message);
+    if (failure === 'rejected') {
+      reportMisconfigured('invalid', stderrOf(error));
+    } else {
+      if (failure === 'rate-limited')
+        postAdvisory('rate-limited', advisoryOptions(), stderrOf(error));
+      process.exit(1);
+    }
   }
 
   // Fail (fix-review), do not run to timeout (cancellation): see capture.ts.
