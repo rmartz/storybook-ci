@@ -48,6 +48,7 @@ import { readBaseRender, writeBaseManifest, writeRenders } from '../renders.js';
 import { normalizeImportPath, readStoryEntries, storyFilesFromEntries } from '../story-index.js';
 import type { AdvisoryOptions, AdvisoryReason, PatStatus } from '../advisory.js';
 import type { CaptureOptions, CaptureOutcome } from '../capture.js';
+import { hasGalleryImages } from '../gallery.js';
 import type { BaseRenderStatus } from '../gallery.js';
 import type { ResolveInput, ScreenshotResolver, StoryIndexEntry } from '../types.js';
 
@@ -295,34 +296,40 @@ async function runCapture(): Promise<void> {
     console.error('Base render unavailable — posting the PR render only.');
   }
 
-  try {
-    postScreenshotComment(outcome.captured, {
-      repo: env('REPO'),
-      prNumber: env('PR_NUMBER'),
-      headSha: env('PR_HEAD_SHA'),
-      outputDir,
-      marker: env('COMMENT_MARKER', '<!-- storybook-screenshots-bot -->'),
-      before: base.entries,
-      baseStatus,
-      baseComplete: base.complete,
-      headComplete: isComplete(outcome),
-      expiryNote: env('PAT_EXPIRY_NOTE'),
-    });
-    console.log(`Published ${outcome.captured.length} screenshot(s).`);
-  } catch (error) {
-    // The PAT authenticated in preflight but the upload still failed. A rejected
-    // token (e.g. a missing scope) is misconfiguration: advise, stay green. A rate
-    // limit or any other GitHub failure fails the job like a flaky dependency; the
-    // rate limit also gets an advisory, so nobody rotates a token that works.
-    const message = errorMessage(error);
-    console.error(`Screenshot upload failed: ${message}`);
-    const failure = classifyGhFailure(message);
-    if (failure === 'rejected') {
-      reportMisconfigured('invalid', stderrOf(error));
-    } else {
-      if (failure === 'rate-limited')
-        postAdvisory('rate-limited', advisoryOptions(), stderrOf(error));
-      process.exit(1);
+  if (!hasGalleryImages(outcome.captured.length, base.entries.length, baseStatus)) {
+    // Nothing to show: leave any previous gallery untouched rather than replace it
+    // with an empty table. The incomplete-capture check below still fails the job.
+    console.error('No screenshots captured — not posting or updating the gallery comment.');
+  } else {
+    try {
+      postScreenshotComment(outcome.captured, {
+        repo: env('REPO'),
+        prNumber: env('PR_NUMBER'),
+        headSha: env('PR_HEAD_SHA'),
+        outputDir,
+        marker: env('COMMENT_MARKER', '<!-- storybook-screenshots-bot -->'),
+        before: base.entries,
+        baseStatus,
+        baseComplete: base.complete,
+        headComplete: isComplete(outcome),
+        expiryNote: env('PAT_EXPIRY_NOTE'),
+      });
+      console.log(`Published ${outcome.captured.length} screenshot(s).`);
+    } catch (error) {
+      // The PAT authenticated in preflight but the upload still failed. A rejected
+      // token (e.g. a missing scope) is misconfiguration: advise, stay green. A rate
+      // limit or any other GitHub failure fails the job like a flaky dependency; the
+      // rate limit also gets an advisory, so nobody rotates a token that works.
+      const message = errorMessage(error);
+      console.error(`Screenshot upload failed: ${message}`);
+      const failure = classifyGhFailure(message);
+      if (failure === 'rejected') {
+        reportMisconfigured('invalid', stderrOf(error));
+      } else {
+        if (failure === 'rate-limited')
+          postAdvisory('rate-limited', advisoryOptions(), stderrOf(error));
+        process.exit(1);
+      }
     }
   }
 
