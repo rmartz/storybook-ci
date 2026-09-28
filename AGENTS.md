@@ -100,10 +100,19 @@ Bootstrap (`ai-ensure-*`) is a one-time starter, not an ongoing manager.
   package-pins, docs-links, md-pairing, okf, okf-index, and file-caps.
 - **Safe bot merge:** this repo consumes [`merge-safety.yml`](.github/workflows/merge-safety.yml)
   (required check `merge-safety`) and [`bot-automerge.yml`](.github/workflows/bot-automerge.yml).
-- **CI, releases, labels** are owned here: typecheck / lint / format / build /
-  test / release-dry-run ([ci.yml](.github/workflows/ci.yml)), the PR-title lint,
-  the post-merge commit-convention tripwire, and the semantic-release
-  [release.yml](.github/workflows/release.yml).
+- **CI, labels** are owned here: typecheck / lint / format / build / test
+  ([ci.yml](.github/workflows/ci.yml)), the PR-title lint, and the post-merge
+  commit-convention tripwire.
+- **Releases** run through the fleet's shared
+  [semantic-release-ci](https://github.com/rmartz/semantic-release-ci) workflows:
+  [release.yml](.github/workflows/release.yml) releases on push to `main`, and
+  [release-check.yml](.github/workflows/release-check.yml) (required check
+  `release-check / release-check`) proves `.releaserc.json` still works with the
+  shared toolchain on every PR. The toolchain (`semantic-release`, its plugins, the
+  changelog preset) is **not** in this repo's `package.json` — never add it back,
+  and never reintroduce a `semantic-release --dry-run` job as a release guard: on a
+  PR it exits before rendering notes, so it passes without testing anything
+  (it passed #30).
 
 ## Common commands
 
@@ -142,13 +151,13 @@ Most are enforced by eslint; the intent:
   branch to base a worktree on.)
 - **PR titles must be Conventional Commits.** The repo squash-merges using the PR
   title, so it is the only subject that reaches `main`.
-- **Releases are automatic** via `semantic-release` on every push to `main`: it
-  analyzes the conventional subjects since the last `vX.Y.Z` tag, computes the
-  next version, and creates the tag + GitHub Release. **Version mapping** (standard
-  SemVer from the `conventionalcommits` preset): `feat:` → minor; `fix:` / `perf:`
-  → patch; a breaking `!` → major; `docs:` / `chore:` / `style:` / `refactor:` /
-  `test:` / `ci:` / `build:` do not release. The first release cut `v1.0.0`, so
-  this is a 1.x line — there is no pre-1.0 cap.
+- **Releases are automatic** via the shared semantic-release workflow on every
+  push to `main`: it analyzes the conventional subjects since the last `vX.Y.Z`
+  tag, computes the next version, and creates the tag + GitHub Release. **Version
+  mapping** (standard SemVer from the `conventionalcommits` preset): `feat:` →
+  minor; `fix:` / `perf:` → patch; a breaking `!` → major; `docs:` / `chore:` /
+  `style:` / `refactor:` / `test:` / `ci:` / `build:` do not release. The first
+  release cut `v1.0.0`, so this is a 1.x line — there is no pre-1.0 cap.
 - **The two reusable workflows are product code, not this repo's CI.** A change to
   `storybook-tests.yml` or `storybook-screenshots.yml` ships to consumers, so it
   takes a **releasing** type (`feat:` / `fix:` / `perf:`) — never `ci:`, which

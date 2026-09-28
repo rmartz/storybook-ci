@@ -1,8 +1,12 @@
 name: Release
 
-# Automatic releases, tag-as-source-of-truth. semantic-release runs on every push
-# to main: it analyzes the conventional-commit subjects since the last vX.Y.Z tag,
-# computes the next version, and creates the git tag + GitHub Release.
+# Automatic releases, tag-as-source-of-truth, run by the fleet's shared release
+# workflow (rmartz/semantic-release-ci). On every push to main it analyzes the
+# conventional-commit subjects since the last vX.Y.Z tag, computes the next
+# version, and creates the git tag + GitHub Release. The release toolchain
+# (semantic-release, its plugins and the changelog preset) lives in
+# semantic-release-ci, where a toolchain bump is tested before it reaches this
+# pin; the options stay here in .releaserc.json.
 #
 # This repo is CI-only and UNPUBLISHED — there is deliberately NO
 # @semantic-release/npm plugin (see .releaserc.json) and package.json stays a
@@ -19,9 +23,8 @@ on:
   push:
     branches: [main]
 
-# Serialize releases so two pushes can't publish concurrently.
-concurrency: release
-
+# The shared workflow declares no permissions of its own; it runs with these.
+# Releases are serialized per repository inside it.
 permissions:
   contents: write # create tags and GitHub releases
   issues: write # semantic-release comments on released issues
@@ -29,15 +32,4 @@ permissions:
 
 jobs:
   release:
-    name: Release
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0 # semantic-release needs full history + tags
-          persist-credentials: false # authenticates via GITHUB_TOKEN below
-      - uses: ./.github/actions/setup
-      - run: pnpm exec semantic-release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    uses: rmartz/semantic-release-ci/.github/workflows/semantic-release.yml@4de919a5895b3add06be7faadf3bf04490d909a0 # v1.0.0
