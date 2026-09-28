@@ -9,10 +9,10 @@ name: Release check
 #
 # It replaces the old `semantic-release --dry-run` job, which exits on a
 # pull_request event before rendering notes and so passed without testing
-# anything (it passed #30, the preset bump that broke #3). Needs only
-# `contents: read`, so it runs on Dependabot and fork PRs. Required check:
-# `release-check / release-check`. It runs on every PR — never gate a required
-# check with `on.paths`.
+# anything: it passed #30, the same kind of preset bump that broke the genesis
+# release in #3. Needs only `contents: read`, so it runs on Dependabot and fork
+# PRs. Required check: `release-check / release-check`. It runs on every PR —
+# never gate a required check with `on.paths`.
 
 on:
   pull_request:

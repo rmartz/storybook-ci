@@ -152,13 +152,12 @@ Most are enforced by eslint; the intent:
 - **PR titles must be Conventional Commits.** The repo squash-merges using the PR
   title, so it is the only subject that reaches `main`.
 - **Releases are automatic** via the shared semantic-release workflow on every
-  push to `main`: it
-  analyzes the conventional subjects since the last `vX.Y.Z` tag, computes the
-  next version, and creates the tag + GitHub Release. **Version mapping** (standard
-  SemVer from the `conventionalcommits` preset): `feat:` → minor; `fix:` / `perf:`
-  → patch; a breaking `!` → major; `docs:` / `chore:` / `style:` / `refactor:` /
-  `test:` / `ci:` / `build:` do not release. The first release cut `v1.0.0`, so
-  this is a 1.x line — there is no pre-1.0 cap.
+  push to `main`: it analyzes the conventional subjects since the last `vX.Y.Z`
+  tag, computes the next version, and creates the tag + GitHub Release. **Version
+  mapping** (standard SemVer from the `conventionalcommits` preset): `feat:` →
+  minor; `fix:` / `perf:` → patch; a breaking `!` → major; `docs:` / `chore:` /
+  `style:` / `refactor:` / `test:` / `ci:` / `build:` do not release. The first
+  release cut `v1.0.0`, so this is a 1.x line — there is no pre-1.0 cap.
 - **The two reusable workflows are product code, not this repo's CI.** A change to
   `storybook-tests.yml` or `storybook-screenshots.yml` ships to consumers, so it
   takes a **releasing** type (`feat:` / `fix:` / `perf:`) — never `ci:`, which
