@@ -100,6 +100,10 @@ Bootstrap (`ai-ensure-*`) is a one-time starter, not an ongoing manager.
   package-pins, docs-links, md-pairing, okf, okf-index, and file-caps.
 - **Safe bot merge:** this repo consumes [`merge-safety.yml`](.github/workflows/merge-safety.yml)
   (required check `merge-safety`) and [`bot-automerge.yml`](.github/workflows/bot-automerge.yml).
+- **PR policy:** the [`pr-policy.yml`](.github/workflows/pr-policy.yml) caller
+  runs `rmartz/pr-policy-action` (SHA-pinned, Dependabot-bumped) and posts the
+  `pr-policy` verdict. It passes `skip-uat: true`: this repo has nothing to
+  user-test.
 - **CI, labels** are owned here: typecheck / lint / format / build / test
   ([ci.yml](.github/workflows/ci.yml)), the PR-title lint, and the post-merge
   commit-convention tripwire.
