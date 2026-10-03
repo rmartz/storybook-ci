@@ -103,10 +103,12 @@ Bootstrap (`ai-ensure-*`) is a one-time starter, not an ongoing manager.
 - **PR policy:** the [`pr-policy.yml`](.github/workflows/pr-policy.yml) caller
   runs `rmartz/pr-policy-action` (SHA-pinned, Dependabot-bumped) and posts the
   `pr-policy` verdict. It passes `skip-uat: true`: this repo has nothing to
-  user-test.
+  user-test. Its `title` check validates PR titles (Conventional Commits,
+  breaking-marker and type rules), so there is no separate PR-title-lint
+  workflow.
 - **CI, labels** are owned here: typecheck / lint / format / build / test
-  ([ci.yml](.github/workflows/ci.yml)), the PR-title lint, and the post-merge
-  commit-convention tripwire.
+  ([ci.yml](.github/workflows/ci.yml)) and the post-merge commit-convention
+  tripwire.
 - **Releases** run through the fleet's shared
   [semantic-release-ci](https://github.com/rmartz/semantic-release-ci) workflows:
   [release.yml](.github/workflows/release.yml) releases on push to `main`, and
@@ -168,7 +170,7 @@ Most are enforced by eslint; the intent:
   cuts no release and leaves consumers nothing to pin, and never `!` merely
   because a workflow file changed. The general "a workflow change is `ci`-typed"
   convention applies only to this repo's **own** CI: `ci.yml`, `release.yml`,
-  `repo-hygiene.yml`, the PR-title lint and the other callers, and
+  `repo-hygiene.yml`, `pr-policy.yml` and the other callers, and
   `.github/actions/setup`. (This happened once: #36 was retitled `perf` → `ci`
   in review and merged without a release.)
 
