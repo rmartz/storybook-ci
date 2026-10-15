@@ -50,3 +50,14 @@ checks:
       - glob: 'docs/**/*.md'
         lines: { warn: 500, error: 700 }
         bytes: { warn: 32KB, error: 48KB }
+      # Exception for the one file over the package's 400-line `**/*` catch-all
+      # (new in @rmartz/repo-hygiene v14; workflow YAML was uncapped before it).
+      # The screenshots workflow cannot shrink by extraction along a clean seam: a
+      # reusable workflow's `uses: ./…` resolves against the CALLER's checkout, so
+      # its steps cannot move into a local composite action (see AGENTS.md), and
+      # the Before/After renders must share one job. Most of its length is the
+      # documented input surface and the comments that carry the operational
+      # invariants. The warn tier flags further growth well before the hard cap.
+      # Every other file, workflows included, keeps the package default.
+      - glob: '.github/workflows/storybook-screenshots.yml'
+        lines: { warn: 450, error: 500 }
