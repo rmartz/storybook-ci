@@ -66,7 +66,7 @@ Folding the install into `build-command` instead would work but pays an uncached
 | `capture-deadline-ms`     | `240000`                             | Per-render fail-not-cancel budget (keep below the job timeout).              |
 | `timeout-minutes`         | `8`                                  | Backstop job timeout when `capture-base` is off.                             |
 | `base-timeout-minutes`    | `14`                                 | Backstop job timeout used instead when `capture-base` is on.                 |
-| `comment-marker`          | `<!-- storybook-screenshots-bot -->` | Update-in-place key.                                                         |
+| `comment-marker`          | `<!-- storybook-screenshots-bot -->` | Tags each gallery so earlier ones are hidden when a new one posts.           |
 | `gh-version`              | `2.99.0`                             | Exact `gh` version to install for `--attach` support.                        |
 | `pat-expiry-warning-days` | `14`                                 | Warn on the gallery when the PAT expires within this many days.              |
 
