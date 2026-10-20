@@ -107,8 +107,8 @@ export function pairRenders(after: RenderedStory[], before: RenderedStory[]): Ga
  * Would the gallery show any image at all? Head screenshots always count; base
  * ones only when the body shows the Before column (`ok`). When every head capture
  * failed and no base render is usable, posting would publish an empty table — and
- * edit-in-place would overwrite the last good gallery with it — so the caller
- * skips the comment. The job still fails on the incomplete capture.
+ * hide the last good gallery behind it — so the caller skips the comment. The job
+ * still fails on the incomplete capture.
  */
 export function hasGalleryImages(
   afterCount: number,

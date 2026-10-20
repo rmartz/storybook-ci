@@ -34,11 +34,12 @@ export interface PostOptions {
 }
 
 /**
- * Write the captured PNGs to `outputDir`, then post a marker-tagged PR comment whose images are GitHub **user-attachments**, uploaded by
- * `gh pr comment --attach`. `--attach` uploads each file and rewrites the local
- * path referenced in the body to a permanent `github.com/user-attachments/…` URL
- * (gh ≥ 2.99), which is what lets the shared action drop the old orphan-branch
- * hosting entirely. Each run posts a new comment and then hides the earlier
+ * Write the captured PNGs to `outputDir`, then post a marker-tagged PR comment
+ * whose images are GitHub **user-attachments**, uploaded by `gh pr comment
+ * --attach`. `--attach` uploads each file and rewrites the local path referenced
+ * in the body to a permanent `github.com/user-attachments/…` URL (gh ≥ 2.99),
+ * which is what lets the shared action drop the old orphan-branch hosting
+ * entirely. Each run posts a new comment and then hides the earlier
  * galleries as outdated (see stale-galleries.ts). It does not edit in place:
  * `--edit-last` targets the PAT owner's latest comment of any kind, so it would
  * overwrite a human's comment, and a review in between makes it post anew anyway.
