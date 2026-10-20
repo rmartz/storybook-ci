@@ -91,7 +91,7 @@ describe('buildGalleryBody', () => {
   const pair = pairRenders([rendered('a', 'after')], [rendered('a', 'before')]);
   const single = pairRenders([rendered('a', 'after')], []);
 
-  it('leads with the marker so the comment updates in place', () => {
+  it('leads with the marker so earlier galleries can be hidden', () => {
     const body = buildGalleryBody(single, { marker: MARKER, headSha: SHA, baseStatus: 'none' });
     expect(body.startsWith(MARKER)).toBe(true);
     expect(body).toContain('abcdef1');

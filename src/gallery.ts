@@ -118,7 +118,7 @@ export function hasGalleryImages(
   return afterCount > 0 || (baseStatus === 'ok' && beforeCount > 0);
 }
 
-/** The PR comment body: one update-in-place gallery, marker first. */
+/** The PR comment body: one gallery, marker first so earlier ones can be hidden. */
 export function buildGalleryBody(rows: GalleryRow[], options: GalleryBodyOptions): string {
   const shortSha = options.headSha.slice(0, 7);
   const note =

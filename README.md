@@ -7,7 +7,7 @@ GitHub Actions workflows a repo pins by SHA:
 - **Storybook tests** — the vitest browser project, plus an optional gating
   `build-storybook`.
 - **Per-PR screenshot galleries** — screenshot the stories a PR's changes touch
-  and post them as one update-in-place PR comment whose images are GitHub
+  and post them as one PR comment whose images are GitHub
   user-attachments uploaded by `gh --attach` (no orphan branch, no cleanup
   workflow).
 

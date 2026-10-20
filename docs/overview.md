@@ -17,9 +17,10 @@ concerns behind two reusable workflows a consuming repo pins by SHA:
 2. **Storybook interaction/render tests** — the vitest browser project, plus an
    optional gating `build-storybook`.
 3. **Per-PR screenshot galleries** — screenshot the stories a PR's changes touch
-   and post them as one update-in-place PR comment whose images are GitHub
-   **user-attachments** uploaded by `gh --attach`. Opt into `capture-base` and
-   the same comment renders the PR base too, Before and After side by side.
+   and post them as a PR comment whose images are GitHub **user-attachments**
+   uploaded by `gh --attach`. Each run posts a fresh gallery and hides the
+   earlier ones as outdated, so one stays expanded. Opt into `capture-base` and
+   the gallery renders the PR base too, Before and After side by side.
 
 The goal is that a repo adopts all three with a handful of caller lines, and the
 subtle operational reasoning — concurrency, fail-vs-cancel, deadlines, fork
@@ -65,6 +66,19 @@ cancellation. A missing or invalid `STORYBOOK_SCREENSHOT_PAT` posts an advisory
 comment for a human and lets the job succeed with a warning, while a GitHub-side
 failure (rate limit, outage) still fails — see
 [authentication](authentication.md#missing-or-invalid-pat--advisory-never-red).
+
+## One visible gallery (screenshots)
+
+Every gallery comment leads with the `comment-marker`. After posting a new one,
+the job lists the PR's comments and minimizes, as **outdated**, each earlier one
+that the PAT's own account posted and that _starts_ with the marker. Someone
+else's comment, or one that merely quotes the marker, is never hidden. Hiding is
+best-effort: if it fails the job logs a warning and still succeeds, since the new
+gallery is already up.
+
+The gallery is not edited in place. `gh pr comment --edit-last` targets the PAT
+owner's latest comment of any kind, so it could overwrite a human comment, and a
+review posted in between makes it start a new comment anyway.
 
 ## Best-effort Before render (screenshots)
 

@@ -2,7 +2,7 @@ name: Storybook Screenshots (reusable)
 
 # Advisory per-PR screenshot gallery for a consuming repo. Builds the repo's
 # Storybook, screenshots the stories a PR's changes touch, and posts them as one
-# update-in-place PR comment whose images are GitHub user-attachments uploaded by
+# PR comment whose images are GitHub user-attachments uploaded by
 # `gh --attach` (no orphan branch, no cleanup workflow). The consumer caller is
 # ~4 lines:
 #
