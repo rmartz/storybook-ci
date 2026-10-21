@@ -41,9 +41,9 @@ Full reference: [docs/configuration.md](docs/configuration.md).
   `capture-deadline-ms`, kept below the job `timeout-minutes`, and exits non-zero
   on the deadline or a broken story — a _failure_ routed to fix-review, not a
   _cancellation_ escalated to a human. Keep the deadline below the timeout — and
-  below **half** of it when `capture-base` runs both renders on one job
-  (`base-timeout-minutes` carries that larger budget so an untouched
-  `timeout-minutes` keeps its meaning).
+  below **half** of it when `capture-base` (the default) runs both renders on
+  one job (`base-timeout-minutes` carries that larger budget; `timeout-minutes`
+  covers only an After-only run).
 - **The Before render never costs the After one.** Every step of the
   `capture-base` path is `continue-on-error` and gated on its predecessor, and
   `screenshots capture-base` itself never throws or exits non-zero. A base render

@@ -67,28 +67,29 @@ on:
         default: chromium
       capture-base:
         description: >-
-          Also render the PR base and post the gallery as Before/After. Roughly
-          doubles the job (a second install + Storybook build + capture), so it
-          is opt-in; base-timeout-minutes covers the extra budget. Best-effort —
-          a base render that fails degrades the comment to After-only.
+          Also render the PR base and post the gallery as Before/After. On by
+          default; set false for an After-only gallery. Roughly doubles the job
+          (a second install + Storybook build + capture), so base-timeout-minutes
+          replaces timeout-minutes while it is on. Best-effort — a base render
+          that fails degrades the comment to After-only.
         type: boolean
         required: false
-        default: false
+        default: true
       capture-deadline-ms:
         description: 'Per-render fail-not-cancel budget (both renders get it; keep 2x below the job timeout when capture-base is on).'
         type: string
         required: false
         default: '240000'
       timeout-minutes:
-        description: 'Backstop job timeout (must exceed the capture deadline).'
+        description: 'Backstop job timeout when capture-base is off (must exceed the capture deadline).'
         type: number
         required: false
         default: 8
       base-timeout-minutes:
         description: >-
           Backstop job timeout used INSTEAD of timeout-minutes when capture-base
-          is on, so enabling Before/After does not silently change the budget of
-          a consumer that left it alone. Must exceed twice capture-deadline-ms.
+          is on (the default), sized for two renders. Must exceed twice
+          capture-deadline-ms.
         type: number
         required: false
         default: 14

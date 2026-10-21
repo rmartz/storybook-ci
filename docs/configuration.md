@@ -62,7 +62,7 @@ Folding the install into `build-command` instead would work but pays an uncached
 | `screenshot-resolver`     | `colocation`                         | `colocation` \| `changed-stories-only` \| `all` \| `import-graph`.           |
 | `viewport`                | `1280x720`                           | Capture size (`WIDTHxHEIGHT`).                                               |
 | `browser`                 | `chromium`                           | Playwright browser to install/cache.                                         |
-| `capture-base`            | `false`                              | Also render the PR base and post Before/After (see below).                   |
+| `capture-base`            | `true`                               | Also render the PR base and post Before/After (see below).                   |
 | `capture-deadline-ms`     | `240000`                             | Per-render fail-not-cancel budget (keep below the job timeout).              |
 | `timeout-minutes`         | `8`                                  | Backstop job timeout when `capture-base` is off.                             |
 | `base-timeout-minutes`    | `14`                                 | Backstop job timeout used instead when `capture-base` is on.                 |
@@ -72,9 +72,10 @@ Folding the install into `build-command` instead would work but pays an uncached
 
 ## `capture-base` — the Before/After gallery
 
-With `capture-base: true` the workflow renders the PR **base** as well as its
-head and posts the gallery as a `Story | Before | After` table, so a reviewer
-judges a visual change against what it replaced instead of from memory:
+By default the workflow renders the PR **base** as well as its head and posts
+the gallery as a `Story | Before | After` table, so a reviewer judges a visual
+change against what it replaced instead of from memory. To post only the head
+screenshots, turn it off:
 
 ```yaml
 jobs:
@@ -82,7 +83,7 @@ jobs:
     uses: rmartz/storybook-ci/.github/workflows/storybook-screenshots.yml@<sha> # vX.Y.Z
     secrets: inherit
     with:
-      capture-base: true
+      capture-base: false
 ```
 
 Three things to know:
@@ -95,10 +96,10 @@ Three things to know:
   deleted in the PR has no After; both still get a row, labelled. When a render
   did not finish, the empty cell reads `not captured` rather than claiming the
   story was added or removed.
-- **It roughly doubles the job.** That is why it is opt-in and why the job
-  timeout switches to `base-timeout-minutes` (default `14`) — leaving an
-  untouched `timeout-minutes` to keep meaning what it did for consumers that
-  never enable this. Keep `base-timeout-minutes` above **twice**
+- **It roughly doubles the job.** That is why the job timeout is
+  `base-timeout-minutes` (default `14`) while it is on, and `timeout-minutes`
+  (default `8`) applies only to an After-only run. A consumer that raises
+  `capture-deadline-ms` must raise `base-timeout-minutes` too — keep it above **twice**
   `capture-deadline-ms` plus both builds, so a slow render still _fails_ (routed
   to fix-review) instead of hitting the job timeout and being _cancelled_.
 

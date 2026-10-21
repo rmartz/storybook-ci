@@ -19,7 +19,7 @@ concerns behind two reusable workflows a consuming repo pins by SHA:
 3. **Per-PR screenshot galleries** — screenshot the stories a PR's changes touch
    and post them as a PR comment whose images are GitHub **user-attachments**
    uploaded by `gh --attach`. Each run posts a fresh gallery and hides the
-   earlier ones as outdated, so one stays expanded. Opt into `capture-base` and
+   earlier ones as outdated, so one stays expanded. By default (`capture-base`)
    the gallery renders the PR base too, Before and After side by side.
 
 The goal is that a repo adopts all three with a handful of caller lines, and the
@@ -82,7 +82,7 @@ review posted in between makes it start a new comment anyway.
 
 ## Best-effort Before render (screenshots)
 
-`capture-base` adds a second render — the PR's base, built in a detached worktree
+`capture-base` (on by default) adds a second render — the PR's base, built in a detached worktree
 at the merge base — so the gallery can pair each story's old and new rendering.
 It is deliberately best-effort and the asymmetry of the two sides is expected,
 not an error:
