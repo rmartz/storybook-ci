@@ -57,10 +57,13 @@ jobs:
     secrets: inherit # provides STORYBOOK_SCREENSHOT_PAT (fine-grained PAT)
 ```
 
-Every scope listed is required: a caller's `permissions:` block is exhaustive —
-every scope it omits becomes `none` — and the reusable workflow checks out the
-consumer repo, so omitting `contents: read` fails the run at checkout. For
-`packages: read`, see [below](#private-registry-dependencies).
+Every scope listed is required, in every consumer. A caller's `permissions:`
+block is exhaustive (every scope it omits becomes `none`), and each reusable
+workflow requests the scopes it uses. If a called workflow requests a scope the
+caller does not grant, GitHub rejects the whole run before any job is created.
+See [Diagnosing a missing grant](#diagnosing-a-missing-grant). For why
+`packages: read` is among them, see
+[Private-registry dependencies](#private-registry-dependencies).
 
 The screenshots caller needs **no** `concurrency` or `continue-on-error` block —
 per-PR concurrency and the advisory isolation are centralized in the reusable
@@ -159,19 +162,17 @@ GitHub Packages, that install needs credentials, and both workflows provide them
 No PAT is involved — `STORYBOOK_SCREENSHOT_PAT` authorizes gallery uploads only
 (see [authentication.md](authentication.md)) and never reaches the install.
 
-**You must list `packages: read` in your caller's `permissions:` block.** A called
-workflow can only narrow the caller's grant, never widen it, so the scope we
-declare is intersected with yours — declaring it only on our side does nothing.
-Omit it and the install fails with `ERR_PNPM_FETCH_401` and
-`No authorization header was set for the request`.
+That is why both workflows request `packages: read`: without it the job token
+cannot read GitHub Packages, and a private install fails with `ERR_PNPM_FETCH_401`
+and `No authorization header was set for the request`.
 
-Two things make this failure easy to miss:
-
-- It needs a **cold** package-manager store. A warm store resolves from cache
-  without a registry fetch, so a misconfigured repo can pass for months and then
-  fail the first time a PR changes the lockfile — i.e. on a Dependabot PR.
-- It needs a **private** dependency. A consumer with no `.npmrc` never
-  interpolates the token, so both settings are inert there and cost nothing.
+**You must list `packages: read` in your caller's `permissions:` block, whether or
+not you have an `.npmrc`.** Our workflows request the scope, and a called
+workflow can only narrow the caller's grant, never widen it. A caller that omits
+it does not get a 401: the whole run fails to start
+([see below](#diagnosing-a-missing-grant)). In a repo with no `.npmrc` the
+_token_ is inert, since nothing interpolates it, but the _grant_ is still
+required.
 
 Both workflows restore your package-manager store with `actions/setup-node`'s
 `cache:` (keyed on your lockfile), and they share **one** cache entry — a store the
@@ -183,3 +184,32 @@ install.
 
 Cross-owner packages, which the built-in `GITHUB_TOKEN` cannot read, are not
 supported today; open an issue if you need one.
+
+## Diagnosing a missing grant
+
+When a caller omits a scope the reusable workflow requests, the run's conclusion
+is **`startup_failure`**, with zero jobs and zero check runs. Nothing installs,
+so there is no `ERR_PNPM_FETCH_401` to find in a log. This happens in every
+consumer, with or without an `.npmrc`, and it is easy to misread:
+
+- A required check such as `storybook-tests / Storybook Tests` never reports, so
+  the PR sits blocked on a check that is _missing_, not failing.
+- A path-filtered screenshots caller looks green on the PR that bumps the pin,
+  because it did not run there. It fails on the next PR that touches the filtered
+  paths.
+
+The run page shows an error naming the nested job and the scope it requested
+but was not allowed. Add that scope to the caller's `permissions:` block and push
+again.
+
+## Upgrading from v1.2.1 or earlier
+
+v1.2.2 added `packages: read` to both reusable workflows. It was released as a
+patch, but it breaks any caller that does not grant the scope: moving the pin
+alone turns a working caller into `startup_failure`. Dependabot presents the
+bump as routine.
+
+**If you are pinned at v1.2.1 or earlier, add `packages: read` to both caller
+workflows before, or in the same PR as, moving the pin.** From here on, any new
+scope a reusable workflow requests ships as a major release, so a minor or patch
+bump never needs a permission change.

@@ -173,6 +173,15 @@ Most are enforced by eslint; the intent:
   `repo-hygiene.yml`, `pr-policy.yml` and the other callers, and
   `.github/actions/setup`. (This happened once: #36 was retitled `perf` → `ci`
   in review and merged without a release.)
+- **A new permission scope on a reusable workflow is breaking (`!`).** A caller
+  that does not grant a scope the called workflow requests fails the whole run at
+  startup (`startup_failure`, no jobs), so every existing consumer breaks on the
+  pin bump. Ship it as `feat!` / `fix!` with an upgrade note in
+  [docs/consuming.md](docs/consuming.md#upgrading-from-v121-or-earlier).
+  `test/workflow-permissions.test.ts` pins each workflow's scopes and the
+  documented callers, so the addition cannot slip through. (#26 added
+  `packages: read` as a plain `fix:` in v1.2.2 and broke callers on a
+  patch bump.)
 
 ## Agent directive files
 

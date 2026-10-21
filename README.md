@@ -56,11 +56,13 @@ jobs:
 Replace `<sha>` with the current release commit of `rmartz/storybook-ci`;
 Dependabot's `github-actions` ecosystem keeps the pin current.
 
-Keep `packages: read` even if you think you don't need it: a caller's
-`permissions:` block is exhaustive, a called workflow can only narrow it, and
-omitting the scope fails the dependency install with `ERR_PNPM_FETCH_401` in any
-repo whose `.npmrc` scopes a package to GitHub Packages. See
-[docs/consuming.md](docs/consuming.md#private-registry-dependencies).
+Keep `packages: read` even if you have no `.npmrc`: a caller's `permissions:`
+block is exhaustive, a called workflow can only narrow it, and both workflows
+request the scope. Omit it and GitHub rejects the whole run before any job
+starts (conclusion `startup_failure`, no jobs, no check runs) in **every**
+consumer. Callers pinned at v1.2.1 or earlier must add it before, or together
+with, moving the pin. See
+[docs/consuming.md](docs/consuming.md#diagnosing-a-missing-grant).
 
 ## Screenshot posting needs a user-level PAT
 
