@@ -51,7 +51,7 @@
   },
   "dependencies": {
     "picomatch": "^4.0.2",
-    "playwright": "^1.64.0"
+    "playwright": "^1.64.1"
   },
   "pnpm": {
     "overrides": {
