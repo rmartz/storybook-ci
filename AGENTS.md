@@ -107,7 +107,7 @@ Bootstrap (`ai-ensure-*`) is a one-time starter, not an ongoing manager.
   breaking-marker and type rules), so there is no separate PR-title-lint
   workflow.
 - **PR lifecycle labels:** the [`pr-lifecycle.yml`](.github/workflows/pr-lifecycle.yml)
-  caller runs `rmartz/pr-lifecycle-action` without arming, with `uat: 'off'` matching `skip-uat`: it keeps each PR's lifecycle labels current, marks every PR `no UAT needed`, and posts the `pr-lifecycle/sign-off` status (with the merge-bot App token, which the `pr-policy` caller trusts). `bot-automerge.yml` still
+  caller runs `rmartz/pr-lifecycle-action` without arming, with `uat: 'off'` matching `skip-uat`: it keeps each PR's lifecycle labels current, marks every PR `no UAT needed`, and posts the `pr-lifecycle/sign-off` status (as the `rmartz-pr-lifecycle` App, which the `pr-policy` caller trusts). `bot-automerge.yml` still
   does the merging.
 - **CI, labels** are owned here: typecheck / lint / format / build / test
   ([ci.yml](.github/workflows/ci.yml)) and the post-merge commit-convention
