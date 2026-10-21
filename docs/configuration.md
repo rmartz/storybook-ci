@@ -115,10 +115,13 @@ Three things to know:
 
 Both workflows need `contents: read` and `packages: read`; the screenshots
 workflow also needs `pull-requests: write`. These are set in the **caller's**
-`permissions:` block, not passed as inputs — a called workflow can only narrow
-the caller's grant, so the scopes we declare are intersected with yours. See
-[consuming.md](consuming.md#private-registry-dependencies) for why
-`packages: read` is required even though it is inert in a repo with no `.npmrc`.
+`permissions:` block, not passed as inputs. A called workflow can only narrow the
+caller's grant, so the scopes we request must all be granted. A caller that omits
+one, `packages: read` included, fails the whole run at startup (`startup_failure`,
+no jobs) in **every** consumer, with or without an `.npmrc`. See
+[consuming.md](consuming.md#diagnosing-a-missing-grant) for how to recognize it,
+and [Private-registry dependencies](consuming.md#private-registry-dependencies)
+for why the scope exists.
 
 ## Storybook telemetry is off (not an input)
 
