@@ -82,6 +82,17 @@ to write correctly. That inverts the workflow's stated purpose — centralizing 
 advisory isolation, per-PR concurrency, fork-skip, fail-vs-cancel, change gating,
 and Chromium provisioning so a consumer never restates them.
 
+## Dependabot naming is solved by a group
+
+A separate `storybook-ci-action` repo was proposed so a release would arrive as
+one Dependabot PR with a readable name, not two PRs each titled by a workflow's
+full path. The split only happens for majors: a consumer's catch-all
+`github-actions` group takes minor and patch bumps but leaves each major as its
+own PR, one per workflow file. A `storybook-ci` Dependabot group in the consumer
+fixes both the split and the name, and costs nothing above. The snippet is in
+[consuming.md](consuming.md#grouping-the-dependabot-bumps). PR naming is no
+reason to reopen this decision.
+
 ## What would reopen this
 
 - **We start publishing a package** that the workflows install by version string.
