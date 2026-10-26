@@ -102,8 +102,9 @@ Bootstrap (`ai-ensure-*`) is a one-time starter, not an ongoing manager.
   (required check `merge-safety`) and [`bot-automerge.yml`](.github/workflows/bot-automerge.yml).
 - **PR policy:** the [`pr-policy.yml`](.github/workflows/pr-policy.yml) caller
   runs `rmartz/pr-policy-action` (SHA-pinned, Dependabot-bumped) and posts the
-  `pr-policy` verdict. It passes `skip-uat: true`: this repo has nothing to
-  user-test. Its `title` check validates PR titles (Conventional Commits,
+  `pr-policy` verdict. It passes `skip-uat: true`: this repo skips UAT by choice
+  (what it ships is user-facing, so this is a decision, not a claim there's
+  nothing to test). Its `title` check validates PR titles (Conventional Commits,
   breaking-marker and type rules), so there is no separate PR-title-lint
   workflow.
 - **PR lifecycle labels:** the [`pr-lifecycle.yml`](.github/workflows/pr-lifecycle.yml)
