@@ -97,6 +97,35 @@ capture), so the job timeout is `base-timeout-minutes` while it is on and
 fails, the comment degrades to After-only and says so. See
 [configuration.md](configuration.md#capture-base--the-beforeafter-gallery).
 
+## Grouping the Dependabot bumps
+
+Dependabot names a reusable workflow by its full path
+(`rmartz/storybook-ci/.github/workflows/storybook-tests.yml`) and treats each
+file as its own dependency. Both workflows ship on one version line, so a release
+moves both pins. A consumer whose catch-all `github-actions` group excludes
+majors gets **two** major-bump PRs, one per file. Add a `storybook-ci` group
+**ahead of** the catch-all, with no `update-types` filter, so every bump
+(majors included) arrives as one PR titled by the group name:
+
+```yaml
+# .github/dependabot.yml, in the github-actions entry
+groups:
+  storybook-ci:
+    patterns:
+      - 'rmartz/storybook-ci/*'
+  github-actions:
+    # … the existing catch-all
+```
+
+Dependabot assigns a dependency to the first group it matches, so the order
+matters. A consumer whose Dependabot audit script keeps a `KNOWN_GROUPS` list
+must also add `storybook-ci` to it. Otherwise the title's `storybook` word
+attributes the PR to the retired npm `storybook` family.
+
+This is why the consumer surface has no composite Action for the sake of a
+readable Dependabot name: see
+[reusable-workflows-vs-actions.md](reusable-workflows-vs-actions.md#dependabot-naming-is-solved-by-a-group).
+
 ## What adoption removes
 
 A repo migrating off a bespoke implementation deletes:
