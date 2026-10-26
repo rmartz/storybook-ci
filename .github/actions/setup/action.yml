@@ -48,16 +48,12 @@ runs:
       shell: bash
       env:
         PLAYWRIGHT_BROWSERS: ${{ inputs.playwright }}
-        CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
-      # On an exact cache hit only ensure the OS libraries (fast, no download);
-      # otherwise install the browser plus its system deps. Retry either way: the
-      # browser/apt install hits transient CDN/apt failures.
+      # Browser binaries only — no apt. The ubuntu-latest image already ships the
+      # libraries Chromium needs, and a slow apt mirror stalls rather than fails,
+      # so `--with-deps` could hang past the job timeout (#90). On a cache hit this
+      # downloads nothing. Retry: the browser download hits transient CDN failures.
       run: |
-        if [ "$CACHE_HIT" = "true" ]; then
-          install_cmd="pnpm exec playwright install-deps $PLAYWRIGHT_BROWSERS"
-        else
-          install_cmd="pnpm exec playwright install --with-deps $PLAYWRIGHT_BROWSERS"
-        fi
+        install_cmd="pnpm exec playwright install $PLAYWRIGHT_BROWSERS"
         for i in 1 2 3; do
           if $install_cmd; then
             exit 0
