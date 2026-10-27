@@ -79,6 +79,13 @@ setup rather than referencing `./.github/actions/setup`. That composite action i
 the canonical FR-1 provisioning and is used by this repo's **own** CI; if you
 change the provisioning logic, update both it and the inlined copies.
 
+The provisioning installs the browser binary only, with no apt step, so a slow
+Ubuntu mirror can't stall a job (#90). `storybook-tests.yml` adds apt back only
+when a caller opts in with `install-system-deps`. The one deliberate exception is
+`storybook-screenshots.yml`, which still runs `--with-deps`: the font packages
+apt installs change what the screenshots look like, so dropping them is a visual
+change of its own, not a provisioning tweak.
+
 ## Documentation — update it as part of every task
 
 - **Read first.** Before editing, read the relevant `docs/` page(s) and this file.

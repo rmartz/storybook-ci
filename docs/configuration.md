@@ -22,7 +22,23 @@ few.
 | `run-build`           | `true`                                     | Whether to also run the gating `build-storybook` job.          |
 | `build-needs-browser` | `false`                                    | Provision the Playwright browser in the build job (see below). |
 | `browser`             | `chromium`                                 | Playwright browser(s) to install/cache.                        |
+| `install-system-deps` | `false`                                    | Also apt-install the browser's system deps (see below).        |
 | `change-filter`       | `denylist`                                 | `denylist` (skip docs-only) \| `always` \| `off`.              |
+
+### Browser provisioning and system deps (`install-system-deps`)
+
+Both jobs that need a browser install only the Playwright browser binary
+(`playwright install <browser>`) into a cached `~/.cache/ms-playwright`. A cache
+hit downloads nothing. They run **no apt install** by default: the `ubuntu-latest`
+image already ships every library Chromium needs, and the extra packages
+`--with-deps` would add are optional fonts and minor upgrades. Those come from the
+Ubuntu apt mirror, which can slow to a trickle without failing, and a trickle used
+to stall the job until its timeout cancelled it.
+
+Set `install-system-deps: true` only if your tests need what the image lacks, for
+example CJK or other font coverage in a rendered assertion, or a browser other than
+Chromium. The step then runs `playwright install --with-deps <browser>` on every
+run, which puts the apt mirror back on the job's critical path.
 
 ### Rendering the built bundle (`build-needs-browser`)
 
