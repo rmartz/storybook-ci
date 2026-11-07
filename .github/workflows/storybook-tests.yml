@@ -55,6 +55,11 @@ on:
         type: string
         required: false
         default: chromium
+      install-system-deps:
+        description: "Also apt-install the browser's system dependencies (`playwright install --with-deps`). Off by default: the ubuntu-latest image already has the libraries Chromium needs."
+        type: boolean
+        required: false
+        default: false
       change-filter:
         description: 'denylist (skip docs-only) | always | off.'
         type: string
@@ -153,15 +158,22 @@ jobs:
           key: playwright-${{ runner.os }}-${{ inputs.browser }}-${{ hashFiles('**/pnpm-lock.yaml', '**/package-lock.json', '**/yarn.lock') }}
           restore-keys: |
             playwright-${{ runner.os }}-${{ inputs.browser }}-
+      # Browser binary only, unless the caller opts into system deps. The
+      # ubuntu-latest image already ships every library Chromium needs; what
+      # `--with-deps` adds is optional fonts and package upgrades from the Ubuntu
+      # apt mirror, and a slow mirror trickles rather than fails, so it stalled
+      # past the job timeout without the retry loop ever running (#90). On a
+      # cache hit `playwright install` finds the browser present and downloads
+      # nothing, so a cache hit touches no network at all.
       - name: Install Playwright browser
         shell: bash
         env:
           PM: ${{ inputs.package-manager }}
           BROWSER: ${{ inputs.browser }}
-          CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
+          SYSTEM_DEPS: ${{ inputs.install-system-deps }}
         run: |
           set -euo pipefail
-          if [ "$CACHE_HIT" = "true" ]; then sub="install-deps"; else sub="install --with-deps"; fi
+          if [ "$SYSTEM_DEPS" = "true" ]; then sub="install --with-deps"; else sub="install"; fi
           case "$PM" in
             pnpm) runner="pnpm exec playwright" ;;
             npm) runner="npx --yes playwright" ;;
@@ -238,10 +250,10 @@ jobs:
         env:
           PM: ${{ inputs.package-manager }}
           BROWSER: ${{ inputs.browser }}
-          CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
+          SYSTEM_DEPS: ${{ inputs.install-system-deps }}
         run: |
           set -euo pipefail
-          if [ "$CACHE_HIT" = "true" ]; then sub="install-deps"; else sub="install --with-deps"; fi
+          if [ "$SYSTEM_DEPS" = "true" ]; then sub="install --with-deps"; else sub="install"; fi
           case "$PM" in
             pnpm) runner="pnpm exec playwright" ;;
             npm) runner="npx --yes playwright" ;;
