@@ -231,6 +231,14 @@ The run page shows an error naming the nested job and the scope it requested
 but was not allowed. Add that scope to the caller's `permissions:` block and push
 again.
 
+## Upgrading to the Node.js 26 default
+
+The `node-version` input of both reusable workflows defaults to `26.x` (it was
+`24.x`). This ships as a major release because a caller that relies on the
+default now builds and tests on Node.js 26. If your repo is not ready for 26,
+pass `node-version: 24.x` explicitly in the caller's `with:` block before moving
+the pin.
+
 ## Upgrading from v1.2.1 or earlier
 
 v1.2.2 added `packages: read` to both reusable workflows. It was released as a
