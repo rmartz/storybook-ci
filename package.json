@@ -45,13 +45,13 @@
     "prettier": "^3.9.10",
     "tsup": "^9.0.0",
     "typescript": "^6.0.3",
-    "vite": "^8.3.5",
+    "vite": "^8.3.6",
     "vitest": "^5.1.0",
     "yaml": "^2.9.1"
   },
   "dependencies": {
     "picomatch": "^4.0.2",
-    "playwright": "^1.64.1"
+    "playwright": "^1.65.0"
   },
   "pnpm": {
     "overrides": {
