@@ -26,7 +26,7 @@ on:
       node-version:
         type: string
         required: false
-        default: 24.x
+        default: 26.x
       build-command:
         description: 'Command that produces the static Storybook bundle.'
         type: string
