@@ -16,7 +16,7 @@ few.
 | Input                 | Default                                    | Purpose                                                        |
 | --------------------- | ------------------------------------------ | -------------------------------------------------------------- |
 | `package-manager`     | `pnpm`                                     | `pnpm` \| `npm` \| `yarn` — drives install + exec.             |
-| `node-version`        | `24.x`                                     | Toolchain version.                                             |
+| `node-version`        | `26.x`                                     | Toolchain version.                                             |
 | `test-command`        | `pnpm exec vitest run --project storybook` | The browser test project command.                              |
 | `build-command`       | `pnpm build-storybook`                     | Gating production Storybook build.                             |
 | `run-build`           | `true`                                     | Whether to also run the gating `build-storybook` job.          |
@@ -53,7 +53,7 @@ Folding the install into `build-command` instead would work but pays an uncached
 | Input                     | Default                              | Purpose                                                                      |
 | ------------------------- | ------------------------------------ | ---------------------------------------------------------------------------- |
 | `package-manager`         | `pnpm`                               | `pnpm` \| `npm` \| `yarn` — drives the consumer install + build.             |
-| `node-version`            | `24.x`                               | Toolchain version.                                                           |
+| `node-version`            | `26.x`                               | Toolchain version.                                                           |
 | `build-command`           | `pnpm build-storybook`               | Produce the static bundle.                                                   |
 | `static-dir`              | `storybook-static`                   | Where `index.json` + assets land.                                            |
 | `story-globs`             | `src/**/*.stories.@(ts\|tsx)`        | Which files count as stories.                                                |

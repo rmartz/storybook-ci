@@ -29,7 +29,7 @@ on:
         description: 'Node.js version for the toolchain.'
         type: string
         required: false
-        default: 24.x
+        default: 26.x
       test-command:
         description: 'The browser test project command.'
         type: string
