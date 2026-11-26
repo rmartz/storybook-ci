@@ -77,7 +77,9 @@ A reusable workflow's `uses: ./…` resolves against the **caller's** checkout, 
 this repo's, so the two reusable workflows **inline** their toolchain/Chromium
 setup rather than referencing `./.github/actions/setup`. That composite action is
 the canonical FR-1 provisioning and is used by this repo's **own** CI; if you
-change the provisioning logic, update both it and the inlined copies.
+change the provisioning logic, update both it and the inlined copies. A Node
+major upgrade also bumps `engines` and `@types/node` by hand: Dependabot ignores
+`@types/node` majors so the types never run ahead of the runtime.
 
 The provisioning installs the browser binary only, with no apt step, so a slow
 Ubuntu mirror can't stall a job (#90). `storybook-tests.yml` adds apt back only
