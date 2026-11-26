@@ -47,7 +47,8 @@ updates:
       # runtime lacks, so it moves by hand with the runtime upgrade. Minors and
       # patches still flow.
       - dependency-name: '@types/node'
-        update-types: ['version-update:semver-major']
+        update-types:
+          - 'version-update:semver-major'
     groups:
       # CI-sensitive tools in one group: pr-policy requires a `ci` title for any
       # eslint/prettier version change (the formatter/linter can fail files a PR
