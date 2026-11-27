@@ -60,6 +60,5 @@ jobs:
           # reach main with no push-triggered CI, release, or merge-safety run
           # (rmartz/bot-automerge-action#31). App-authored events do trigger push
           # workflows, and the App has its own rate-limit pool, so a coordinator
-          # that exhausts the user's GraphQL quota cannot fail this job
-          # (rmartz/scripts#22).
+          # that exhausts the user's GraphQL quota cannot fail this job.
           token: ${{ steps.app-token.outputs.token }}
